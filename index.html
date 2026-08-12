@@ -70,12 +70,29 @@
 
   /* ---- RIGHT PANEL ---- */
   #panel{width:340px;min-width:340px;background:var(--panel);border-left:1px solid var(--line);
-    display:flex;flex-direction:column;height:100%;overflow:hidden;}
-  #panel-header{padding:16px 18px 12px;border-bottom:1px solid var(--line);}
+    display:flex;flex-direction:column;height:100%;overflow:hidden;transition:transform .25s ease;}
+  #panel-header{padding:16px 18px 12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;}
   #panel-header h1{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;
     letter-spacing:.04em;margin:0;color:var(--text);}
   #panel-header h1 span{color:var(--amber);}
   #panel-header p{margin:2px 0 0;font-size:10px;color:var(--text-dim);letter-spacing:.06em;}
+  #panel-close{display:none;background:none;border:1px solid var(--line);border-radius:4px;
+    color:var(--text-dim);width:28px;height:28px;font-size:16px;cursor:pointer;flex-shrink:0;}
+
+  #panel-open-btn{display:none;position:absolute;top:10px;right:16px;z-index:600;
+    background:rgba(10,13,18,.9);border:1px solid var(--line);border-radius:4px;
+    color:var(--amber);width:38px;height:38px;font-size:18px;cursor:pointer;
+    align-items:center;justify-content:center;}
+
+  @media (max-width: 760px){
+    #panel{position:fixed;top:0;right:0;bottom:0;width:88vw;min-width:0;max-width:400px;
+      z-index:900;transform:translateX(100%);box-shadow:-8px 0 24px rgba(0,0,0,.5);}
+    #panel.open{transform:translateX(0);}
+    #panel-close{display:block;}
+    #panel-open-btn{display:flex;}
+    #tape-wrap{bottom:80px;}
+  }
 
   #layers{padding:14px 14px 8px;overflow-y:auto;flex-shrink:0;max-height:56%;}
   .section-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.12em;
@@ -143,12 +160,16 @@
       </div>
       <div id="tape-caption">ALTITUDE<br><span id="tape-caption-val">SFC</span></div>
     </div>
+    <button id="panel-open-btn" onclick="document.getElementById('panel').classList.add('open')">☰</button>
   </div>
 
   <div id="panel">
     <div id="panel-header">
-      <h1>ALT<span>ITUDE</span></h1>
-      <p>Live aviation weather · click map to inspect</p>
+      <div>
+        <h1>ALT<span>ITUDE</span></h1>
+        <p>Live aviation weather · click map to inspect</p>
+      </div>
+      <button id="panel-close" onclick="document.getElementById('panel').classList.remove('open')">✕</button>
     </div>
 
     <div id="search-box">
@@ -251,6 +272,7 @@ document.querySelectorAll('.layer-btn').forEach(btn=>{
     const id = btn.dataset.id;
     if(activeLayer === id){ deactivateLayer(); return; }
     setActiveLayer(id);
+    if(window.innerWidth <= 760) document.getElementById('panel').classList.remove('open');
   });
 });
 
