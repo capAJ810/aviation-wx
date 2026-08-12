@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ALTITUDE — Aviation Weather</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12;
+    --panel:#12161d;
+    --panel2:#181d26;
+    --line:#262d3a;
+    --amber:#ffb000;
+    --amber-dim:#8a6000;
+    --cyan:#4fd8c9;
+    --red:#ff4d4d;
+    --text:#e8ecf1;
+    --text-dim:#7c8698;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:'IBM Plex Mono',monospace;overflow:hidden;}
+  .label{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.08em;}
+
+  #app{display:flex;height:100vh;width:100vw;}
+
+  /* ---- MAP ---- */
+  #map{flex:1;height:100%;background:#0a0d12;}
+  .leaflet-container{background:#0a0d12 !important;font-family:'IBM Plex Mono',monospace;}
+  .leaflet-control-attribution{background:rgba(10,13,18,.75) !important;color:var(--text-dim) !important;font-size:9px;}
+  .leaflet-control-attribution a{color:var(--cyan) !important;}
+
+  /* top status bar over map */
+  #topbar{position:absolute;top:0;left:0;right:0;z-index:500;display:flex;align-items:center;
+    justify-content:space-between;padding:10px 16px;pointer-events:none;}
+  #topbar .chip{pointer-events:auto;background:rgba(10,13,18,.85);border:1px solid var(--line);
+    border-radius:3px;padding:6px 12px;font-size:11px;color:var(--text-dim);letter-spacing:.05em;
+    display:flex;align-items:center;gap:8px;}
+  #topbar .chip b{color:var(--amber);font-weight:600;}
+  #clock{font-size:13px;color:var(--cyan);font-weight:600;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);}
+  .dot.loading{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:pulse 1s infinite;}
+  @keyframes pulse{50%{opacity:.3;}}
+
+  /* ---- ALTITUDE TAPE (signature element) ---- */
+  #tape-wrap{position:absolute;left:16px;top:64px;bottom:120px;width:78px;z-index:500;
+    display:flex;flex-direction:column;align-items:center;pointer-events:none;}
+  #tape{pointer-events:auto;position:relative;flex:1;width:56px;background:rgba(10,13,18,.9);
+    border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  #tape-track{position:absolute;top:8px;bottom:8px;left:0;right:0;}
+  .tape-tick{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;
+    height:1px;background:var(--line);}
+  .tape-btn{position:absolute;left:4px;right:4px;height:30px;transform:translateY(-50%);
+    background:transparent;border:none;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;
+    font-size:10px;font-weight:500;cursor:pointer;text-align:center;line-height:1.1;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border-radius:3px;transition:.15s;}
+  .tape-btn:hover{color:var(--text);background:rgba(255,255,255,.04);}
+  .tape-btn.active{color:var(--bg);background:var(--amber);font-weight:700;
+    box-shadow:0 0 12px rgba(255,176,0,.5);}
+  .tape-btn .fl{font-size:10.5px;}
+  .tape-btn .hpa{font-size:8px;opacity:.7;}
+  #tape-indicator{position:absolute;left:-6px;width:0;height:0;border-top:6px solid transparent;
+    border-bottom:6px solid transparent;border-left:8px solid var(--amber);z-index:2;
+    transition:top .2s;pointer-events:none;}
+  #tape-caption{margin-top:8px;font-size:9px;color:var(--text-dim);text-align:center;letter-spacing:.05em;}
+
+  /* ---- RIGHT PANEL ---- */
+  #panel{width:340px;min-width:340px;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;height:100%;overflow:hidden;}
+  #panel-header{padding:16px 18px 12px;border-bottom:1px solid var(--line);}
+  #panel-header h1{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;
+    letter-spacing:.04em;margin:0;color:var(--text);}
+  #panel-header h1 span{color:var(--amber);}
+  #panel-header p{margin:2px 0 0;font-size:10px;color:var(--text-dim);letter-spacing:.06em;}
+
+  #layers{padding:14px 14px 8px;overflow-y:auto;flex-shrink:0;max-height:56%;}
+  .section-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.12em;
+    color:var(--text-dim);margin:14px 0 8px;text-transform:uppercase;}
+  .section-label:first-child{margin-top:0;}
+  #layer-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .layer-btn{background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    padding:9px 8px;cursor:pointer;text-align:left;transition:.15s;position:relative;}
+  .layer-btn:hover{border-color:#3a4356;}
+  .layer-btn.active{border-color:var(--amber);background:rgba(255,176,0,.08);}
+  .layer-btn .name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;
+    color:var(--text);letter-spacing:.02em;}
+  .layer-btn.active .name{color:var(--amber);}
+  .layer-btn .tag{font-size:8px;color:var(--text-dim);letter-spacing:.05em;display:block;margin-top:1px;}
+  .layer-btn .tag.derived{color:#c98a2e;}
+  .layer-btn .tag.live{color:var(--cyan);}
+
+  #legend{padding:12px 18px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    flex-shrink:0;}
+  #legend .lg-title{font-size:10px;color:var(--text-dim);letter-spacing:.06em;margin-bottom:6px;}
+  #legend-bar{height:10px;border-radius:2px;width:100%;}
+  #legend-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:4px;}
+
+  #inspector{flex:1;overflow-y:auto;padding:14px 18px 18px;}
+  #inspector .hint{color:var(--text-dim);font-size:11px;line-height:1.6;}
+  #inspector .hint b{color:var(--text);}
+  #profile-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  #profile-header .coords{font-size:11px;color:var(--cyan);}
+  #profile-header .close{cursor:pointer;color:var(--text-dim);font-size:16px;padding:0 4px;}
+  .profile-row{display:grid;grid-template-columns:52px 1fr 30px 30px;gap:8px;align-items:center;
+    padding:5px 0;border-bottom:1px solid var(--line);font-size:11px;}
+  .profile-row .fl{color:var(--text-dim);font-weight:600;}
+  .profile-row .bars{display:flex;gap:3px;height:14px;align-items:flex-end;}
+  .profile-row .bar{flex:1;background:var(--line);border-radius:1px;min-height:2px;}
+  .profile-row .val{text-align:right;color:var(--text);}
+  .profile-row.hilite{background:rgba(255,176,0,.06);}
+  #profile-legend{display:flex;gap:12px;font-size:9px;color:var(--text-dim);margin-top:10px;}
+  #profile-legend span{display:flex;align-items:center;gap:4px;}
+  #profile-legend i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+
+  #search-box{padding:10px 14px;border-bottom:1px solid var(--line);}
+  #search-box input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:4px;
+    color:var(--text);padding:8px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;}
+  #search-box input:focus{border-color:var(--amber);}
+  #search-box input::placeholder{color:var(--text-dim);}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#2a3140;border-radius:3px;}
+
+  .grid-pt-icon{background:none;border:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map">
+    <div id="topbar">
+      <div class="chip"><span class="dot" id="status-dot"></span><span id="status-text">idle</span></div>
+      <div class="chip"><span id="clock">--:--</span>&nbsp;<span style="color:var(--text-dim)">UTC</span></div>
+    </div>
+    <div id="tape-wrap">
+      <div id="tape">
+        <div id="tape-indicator"></div>
+        <div id="tape-track"></div>
+      </div>
+      <div id="tape-caption">ALTITUDE<br><span id="tape-caption-val">SFC</span></div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="panel-header">
+      <h1>ALT<span>ITUDE</span></h1>
+      <p>Live aviation weather · click map to inspect</p>
+    </div>
+
+    <div id="search-box">
+      <input id="search-input" type="text" placeholder="Jump to place or ICAO...">
+    </div>
+
+    <div id="layers">
+      <div class="section-label">Imagery</div>
+      <div id="layer-grid-imagery" class="layer-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+
+      <div class="section-label">By altitude</div>
+      <div id="layer-grid-alt" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+
+      <div class="section-label">Surface / column</div>
+      <div id="layer-grid-surface" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+    </div>
+
+    <div id="legend">
+      <div class="lg-title" id="legend-title">SELECT A LAYER</div>
+      <div id="legend-bar"></div>
+      <div id="legend-labels"><span id="legend-min"></span><span id="legend-max"></span></div>
+    </div>
+
+    <div id="inspector">
+      <div class="hint" id="inspector-hint">
+        <b>Tap anywhere on the map</b> to pull a full vertical profile at that point —
+        icing risk, turbulence estimate, cloud cover and wind from surface to FL450.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============================= CONFIG ============================= */
+const LEVELS = [ // hPa, approx altitude ft (ISA), label
+  {hpa:1000, ft:360,   fl:'SFC'},
+  {hpa:925,  ft:2500,  fl:'FL025'},
+  {hpa:850,  ft:5000,  fl:'FL050'},
+  {hpa:700,  ft:10000, fl:'FL100'},
+  {hpa:600,  ft:14000, fl:'FL140'},
+  {hpa:500,  ft:18300, fl:'FL180'},
+  {hpa:400,  ft:24000, fl:'FL240'},
+  {hpa:300,  ft:30100, fl:'FL300'},
+  {hpa:250,  ft:34000, fl:'FL340'},
+  {hpa:200,  ft:38700, fl:'FL390'},
+  {hpa:150,  ft:44600, fl:'FL450'},
+];
+let currentLevelIdx = 2; // default 850hPa
+const GRID_COLS = 9, GRID_ROWS = 6; // sample grid density
+
+const IMAGERY_LAYERS = [
+  {id:'satellite', name:'Satellite', tag:'live', altDependent:false},
+  {id:'radar',      name:'Rain Radar', tag:'live', altDependent:false},
+];
+const ALT_LAYERS = [
+  {id:'clouds',     name:'Cloud Cover', tag:'live',    altDependent:true, unit:'%'},
+  {id:'temp',       name:'Temperature', tag:'live',    altDependent:true, unit:'°C'},
+  {id:'wind',       name:'Wind', tag:'live',           altDependent:true, unit:'kt'},
+  {id:'icing',      name:'Icing Risk', tag:'derived',  altDependent:true, unit:''},
+  {id:'turbulence', name:'Turbulence', tag:'derived',  altDependent:true, unit:''},
+];
+const SURFACE_LAYERS = [
+  {id:'visibility', name:'Visibility',  tag:'live',    altDependent:false, unit:'km'},
+  {id:'cape',       name:'CAPE Index',  tag:'live',    altDependent:false, unit:'J/kg'},
+  {id:'cloudbase',  name:'Cloud Base',  tag:'derived', altDependent:false, unit:'ft'},
+  {id:'thermals',   name:'Thermals',    tag:'derived', altDependent:false, unit:'ft'},
+];
+const ALL_LAYERS = [...IMAGERY_LAYERS, ...ALT_LAYERS, ...SURFACE_LAYERS];
+let activeLayer = null;
+let gridLayerGroup = null;
+let tileLayer = null;
+let debounceTimer = null;
+
+/* ============================= MAP INIT ============================= */
+const map = L.map('map', {zoomControl:false, worldCopyJump:true, minZoom:2}).setView([25.2, 55.3], 5); // UAE-ish default
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+gridLayerGroup = L.layerGroup().addTo(map);
+let markerLayer = null;
+
+/* ============================= UI BUILD ============================= */
+function layerBtnHtml(l){
+  const tagClass = l.tag === 'derived' ? 'derived' : 'live';
+  const tagText = l.tag === 'derived' ? 'EST' : 'LIVE';
+  return `<div class="layer-btn" data-id="${l.id}">
+    <span class="name">${l.name}</span>
+    <span class="tag ${tagClass}">${tagText}${l.unit ? ' · '+l.unit : ''}</span>
+  </div>`;
+}
+document.getElementById('layer-grid-imagery').innerHTML = IMAGERY_LAYERS.map(layerBtnHtml).join('');
+document.getElementById('layer-grid-alt').innerHTML = ALT_LAYERS.map(layerBtnHtml).join('');
+document.getElementById('layer-grid-surface').innerHTML = SURFACE_LAYERS.map(layerBtnHtml).join('');
+
+document.querySelectorAll('.layer-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const id = btn.dataset.id;
+    if(activeLayer === id){ deactivateLayer(); return; }
+    setActiveLayer(id);
+  });
+});
+
+/* ---- Altitude tape build ---- */
+const tapeTrack = document.getElementById('tape-track');
+LEVELS.forEach((lvl, i)=>{
+  const pct = i/(LEVELS.length-1)*100;
+  const btn = document.createElement('button');
+  btn.className = 'tape-btn' + (i===currentLevelIdx ? ' active' : '');
+  btn.style.top = pct + '%';
+  btn.dataset.idx = i;
+  btn.innerHTML = `<span class="fl">${lvl.fl}</span><span class="hpa">${lvl.hpa}hPa</span>`;
+  btn.addEventListener('click', ()=>setLevel(i));
+  tapeTrack.appendChild(btn);
+});
+function updateTapeIndicator(){
+  const pct = currentLevelIdx/(LEVELS.length-1)*100;
+  document.getElementById('tape-indicator').style.top = `calc(${pct}% + 8px)`;
+  document.getElementById('tape-caption-val').textContent = LEVELS[currentLevelIdx].fl;
+  document.querySelectorAll('.tape-btn').forEach(b=>b.classList.toggle('active', +b.dataset.idx===currentLevelIdx));
+}
+updateTapeIndicator();
+function setLevel(i){
+  currentLevelIdx = i;
+  updateTapeIndicator();
+  if(activeLayer){
+    const meta = ALL_LAYERS.find(l=>l.id===activeLayer);
+    if(meta && meta.altDependent) refreshLayer();
+  }
+}
+
+/* ============================= STATUS ============================= */
+function setStatus(text, loading){
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('status-dot').classList.toggle('loading', !!loading);
+}
+function tickClock(){
+  const d = new Date();
+  document.getElementById('clock').textContent = d.toISOString().slice(11,16);
+}
+tickClock(); setInterval(tickClock, 15000);
+
+/* ============================= COLOR SCALES ============================= */
+function lerpColor(a,b,t){
+  const ar=parseInt(a.slice(1,3),16), ag=parseInt(a.slice(3,5),16), ab=parseInt(a.slice(5,7),16);
+  const br=parseInt(b.slice(1,3),16), bg=parseInt(b.slice(3,5),16), bb=parseInt(b.slice(5,7),16);
+  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), bl=Math.round(ab+(bb-ab)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+function scaleColor(t, stops){
+  t = Math.max(0, Math.min(1, t));
+  const seg = 1/(stops.length-1);
+  const idx = Math.min(stops.length-2, Math.floor(t/seg));
+  const localT = (t - idx*seg)/seg;
+  return lerpColor(stops[idx], stops[idx+1], localT);
+}
+const SCALES = {
+  clouds:     {stops:['#0a0d12','#2b3a4a','#6f8ca6','#e8ecf1'], min:0, max:100, fmt:v=>Math.round(v)+'%'},
+  temp:       {stops:['#3355ff','#4fd8c9','#ffb000','#ff4d4d'], min:-60, max:30, fmt:v=>Math.round(v)+'°'},
+  wind:       {stops:['#12161d','#2e6b5e','#4fd8c9','#ffb000','#ff4d4d'], min:0, max:120, fmt:v=>Math.round(v)+'kt'},
+  icing:      {stops:['#12161d','#2e6b5e','#c98a2e','#ff4d4d'], min:0, max:1, fmt:v=>v>0.66?'SEV':v>0.33?'MOD':v>0.05?'LGT':'NIL'},
+  turbulence: {stops:['#12161d','#2e6b5e','#c98a2e','#ff4d4d'], min:0, max:1, fmt:v=>v>0.66?'SEV':v>0.33?'MOD':v>0.05?'LGT':'NIL'},
+  visibility: {stops:['#ff4d4d','#c98a2e','#2e6b5e','#e8ecf1'], min:0, max:15, fmt:v=>v.toFixed(1)+'km'},
+  cape:       {stops:['#12161d','#2e6b5e','#c98a2e','#ff4d4d'], min:0, max:3000, fmt:v=>Math.round(v)},
+  cloudbase:  {stops:['#ff4d4d','#c98a2e','#4fd8c9','#e8ecf1'], min:0, max:15000, fmt:v=>Math.round(v)+'ft'},
+  thermals:   {stops:['#12161d','#2e6b5e','#ffb000'], min:0, max:8000, fmt:v=>Math.round(v)+'ft'},
+};
+
+function updateLegend(id){
+  const meta = ALL_LAYERS.find(l=>l.id===id);
+  const sc = SCALES[id];
+  document.getElementById('legend-title').textContent = meta.name.toUpperCase() +
+    (meta.altDependent ? ` · ${LEVELS[currentLevelIdx].fl}` : ' · SURFACE');
+  if(!sc){ document.getElementById('legend-bar').style.background='none'; return; }
+  const grad = sc.stops.map((c,i)=>`${c} ${i/(sc.stops.length-1)*100}%`).join(',');
+  document.getElementById('legend-bar').style.background = `linear-gradient(90deg,${grad})`;
+  document.getElementById('legend-min').textContent = sc.fmt(sc.min);
+  document.getElementById('legend-max').textContent = sc.fmt(sc.max);
+}
+
+/* ============================= LAYER ACTIVATION ============================= */
+function clearMapLayers(){
+  gridLayerGroup.clearLayers();
+  if(tileLayer){ map.removeLayer(tileLayer); tileLayer = null; }
+}
+function deactivateLayer(){
+  activeLayer = null;
+  clearMapLayers();
+  document.querySelectorAll('.layer-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('legend-title').textContent = 'SELECT A LAYER';
+  document.getElementById('legend-bar').style.background = 'none';
+  document.getElementById('legend-min').textContent='';
+  document.getElementById('legend-max').textContent='';
+  setStatus('idle', false);
+}
+function setActiveLayer(id){
+  activeLayer = id;
+  document.querySelectorAll('.layer-btn').forEach(b=>b.classList.toggle('active', b.dataset.id===id));
+  clearMapLayers();
+  updateLegend(id);
+  refreshLayer();
+}
+function refreshLayer(){
+  if(!activeLayer) return;
+  if(activeLayer === 'satellite') return loadSatellite();
+  if(activeLayer === 'radar') return loadRadar();
+  loadGridLayer(activeLayer);
+}
+
+/* ============================= IMAGERY LAYERS ============================= */
+function loadSatellite(){
+  setStatus('loading satellite…', true);
+  const d = new Date(Date.now() - 24*3600*1000); // yesterday, near-real-time layer latency safety
+  const dateStr = d.toISOString().slice(0,10);
+  tileLayer = L.tileLayer(
+    `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${dateStr}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+    {attribution:'NASA GIBS / VIIRS', maxNativeZoom:9, opacity:0.85}
+  ).addTo(map);
+  tileLayer.on('load', ()=>setStatus('satellite · '+dateStr, false));
+}
+function loadRadar(){
+  setStatus('loading radar…', true);
+  fetch('https://api.rainviewer.com/public/weather-maps.json')
+    .then(r=>r.json())
+    .then(data=>{
+      const frames = data.radar && data.radar.past;
+      if(!frames || !frames.length){ setStatus('radar unavailable', false); return; }
+      const last = frames[frames.length-1];
+      tileLayer = L.tileLayer(
+        `https://tilecache.rainviewer.com${last.path}/256/{z}/{x}/{y}/2/1_1.png`,
+        {attribution:'RainViewer', opacity:0.7}
+      ).addTo(map);
+      setStatus('radar · live', false);
+    })
+    .catch(()=>setStatus('radar error', false));
+}
+
+/* ============================= GRID DATA LAYERS ============================= */
+function buildGrid(){
+  const b = map.getBounds();
+  const lat0=b.getSouth(), lat1=b.getNorth(), lon0=b.getWest(), lon1=b.getEast();
+  const pts=[];
+  for(let r=0;r<GRID_ROWS;r++){
+    for(let c=0;c<GRID_COLS;c++){
+      const lat = lat0 + (r+0.5)*(lat1-lat0)/GRID_ROWS;
+      const lon = lon0 + (c+0.5)*(lon1-lon0)/GRID_COLS;
+      pts.push([Math.max(-85,Math.min(85,lat)), ((lon+180)%360+360)%360-180]);
+    }
+  }
+  return {pts, cellW:(lon1-lon0)/GRID_COLS, cellH:(lat1-lat0)/GRID_ROWS};
+}
+
+function hourlyVarsForLayer(id){
+  const lvl = LEVELS[currentLevelIdx].hpa;
+  switch(id){
+    case 'clouds': return [`cloud_cover_${lvl}hPa`];
+    case 'temp': return [`temperature_${lvl}hPa`];
+    case 'wind': return [`wind_speed_${lvl}hPa`,`wind_direction_${lvl}hPa`];
+    case 'icing': return [`temperature_${lvl}hPa`,`relative_humidity_${lvl}hPa`];
+    case 'turbulence': {
+      const idx = currentLevelIdx;
+      const upper = LEVELS[Math.max(0,idx-1)].hpa, lower = LEVELS[Math.min(LEVELS.length-1,idx+1)].hpa;
+      return [`wind_speed_${lvl}hPa`,`wind_direction_${lvl}hPa`,`wind_speed_${upper}hPa`,`wind_direction_${upper}hPa`,`wind_speed_${lower}hPa`,`wind_direction_${lower}hPa`];
+    }
+    case 'visibility': return ['visibility'];
+    case 'cape': return ['cape'];
+    case 'cloudbase': return ['temperature_2m','dew_point_2m'];
+    case 'thermals': return ['boundary_layer_height'];
+  }
+}
+
+function loadGridLayer(id){
+  setStatus(`sampling ${id}…`, true);
+  const {pts, cellW, cellH} = buildGrid();
+  const lats = pts.map(p=>p[0].toFixed(3)).join(',');
+  const lons = pts.map(p=>p[1].toFixed(3)).join(',');
+  const vars = hourlyVarsForLayer(id).join(',');
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=1&timezone=UTC`;
+
+  fetch(url).then(r=>r.json()).then(data=>{
+    const arr = Array.isArray(data) ? data : [data];
+    gridLayerGroup.clearLayers();
+    const now = new Date(); now.setMinutes(0,0,0);
+    arr.forEach((station, i)=>{
+      if(!station.hourly) return;
+      const times = station.hourly.time;
+      let hIdx = times.findIndex(t => new Date(t).getTime() >= now.getTime());
+      if(hIdx < 0) hIdx = 0;
+      const val = computeValue(id, station.hourly, hIdx);
+      if(val === null || isNaN(val)) return;
+      drawCell(pts[i], cellW, cellH, id, val, station.hourly, hIdx);
+    });
+    setStatus(`${id} · ${arr.length} samples`, false);
+  }).catch(err=>{
+    console.error(err);
+    setStatus('data error — retry', false);
+  });
+}
+
+function computeValue(id, h, i){
+  const lvl = LEVELS[currentLevelIdx].hpa;
+  switch(id){
+    case 'clouds': return h[`cloud_cover_${lvl}hPa`][i];
+    case 'temp': return h[`temperature_${lvl}hPa`][i];
+    case 'wind': return h[`wind_speed_${lvl}hPa`][i];
+    case 'icing': {
+      const t = h[`temperature_${lvl}hPa`][i], rh = h[`relative_humidity_${lvl}hPa`][i];
+      return icingIndex(t, rh);
+    }
+    case 'turbulence': {
+      const idx = currentLevelIdx;
+      const upper = LEVELS[Math.max(0,idx-1)].hpa, lower = LEVELS[Math.min(LEVELS.length-1,idx+1)].hpa;
+      const ws = h[`wind_speed_${lvl}hPa`][i];
+      const wsU = h[`wind_speed_${upper}hPa`] ? h[`wind_speed_${upper}hPa`][i] : ws;
+      const wsL = h[`wind_speed_${lower}hPa`] ? h[`wind_speed_${lower}hPa`][i] : ws;
+      return turbulenceIndex(ws, wsU, wsL);
+    }
+    case 'visibility': return h.visibility[i]/1000;
+    case 'cape': return h.cape[i];
+    case 'cloudbase': return lclFeet(h.temperature_2m[i], h.dew_point_2m[i]);
+    case 'thermals': return h.boundary_layer_height[i]*3.281;
+  }
+}
+function icingIndex(t, rh){
+  if(t===undefined||rh===undefined) return null;
+  if(t > 2 || t < -25) return 0.03;
+  const tempFactor = 1 - Math.abs(t+8)/17; // peak risk near -8C
+  const rhFactor = Math.max(0,(rh-60)/40);
+  return Math.max(0, Math.min(1, tempFactor*0.6 + rhFactor*0.6));
+}
+function turbulenceIndex(ws, wsU, wsL){
+  const shear = (Math.abs(ws-wsU) + Math.abs(ws-wsL))/2;
+  const base = ws/80; // strong core winds alone raise CAT likelihood
+  return Math.max(0, Math.min(1, shear/35*0.7 + base*0.3));
+}
+function lclFeet(t, td){
+  if(t===undefined||td===undefined) return null;
+  return Math.max(0, 125*(t-td)*3.281);
+}
+
+function drawCell(pt, w, h, id, val, hourly, hIdx){
+  const sc = SCALES[id];
+  const t = (val - sc.min)/(sc.max - sc.min);
+  const color = scaleColor(t, sc.stops);
+  const bounds = [[pt[0]-h/2, pt[1]-w/2],[pt[0]+h/2, pt[1]+w/2]];
+
+  if(id === 'wind'){
+    const dir = hourly[`wind_direction_${LEVELS[currentLevelIdx].hpa}hPa`][hIdx];
+    const icon = L.divIcon({
+      className:'grid-pt-icon',
+      html:`<div style="transform:rotate(${dir}deg);font-size:18px;color:${color};text-shadow:0 0 3px #000;">➤</div>
+            <div style="font-size:9px;color:${color};text-align:center;margin-top:-2px;font-family:'IBM Plex Mono',monospace;">${Math.round(val)}</div>`,
+      iconSize:[30,30], iconAnchor:[15,15]
+    });
+    L.marker(pt, {icon, interactive:false}).addTo(gridLayerGroup);
+  } else {
+    L.rectangle(bounds, {
+      color:'transparent', fillColor:color, fillOpacity:0.55, weight:0, interactive:false
+    }).addTo(gridLayerGroup);
+  }
+}
+
+/* debounced refresh on map move for active layer */
+map.on('moveend', ()=>{
+  if(!activeLayer || activeLayer==='satellite' || activeLayer==='radar') return;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(refreshLayer, 500);
+});
+
+/* ============================= POINT PROFILE (click anywhere) ============================= */
+map.on('click', (e)=>{
+  loadProfile(e.latlng.lat, e.latlng.lng);
+});
+
+function loadProfile(lat, lon){
+  document.getElementById('inspector').innerHTML = `<div class="hint">Loading vertical profile…</div>`;
+  const levelVars = LEVELS.map(l=>`temperature_${l.hpa}hPa,relative_humidity_${l.hpa}hPa,wind_speed_${l.hpa}hPa,wind_direction_${l.hpa}hPa,cloud_cover_${l.hpa}hPa`).join(',');
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility&forecast_days=1&timezone=UTC`;
+
+  if(markerLayer) map.removeLayer(markerLayer);
+  markerLayer = L.circleMarker([lat,lon], {radius:6, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
+
+  fetch(url).then(r=>r.json()).then(data=>{
+    const h = data.hourly;
+    const now = new Date(); now.setMinutes(0,0,0);
+    let i = h.time.findIndex(t => new Date(t).getTime() >= now.getTime());
+    if(i<0) i=0;
+    renderProfile(lat, lon, h, i);
+  }).catch(()=>{
+    document.getElementById('inspector').innerHTML = `<div class="hint">Could not load profile — try again.</div>`;
+  });
+}
+
+function renderProfile(lat, lon, h, i){
+  const rows = LEVELS.map(l=>{
+    const t = h[`temperature_${l.hpa}hPa`][i];
+    const rh = h[`relative_humidity_${l.hpa}hPa`][i];
+    const ws = h[`wind_speed_${l.hpa}hPa`][i];
+    const wd = h[`wind_direction_${l.hpa}hPa`][i];
+    const cc = h[`cloud_cover_${l.hpa}hPa`][i];
+    const ic = icingIndex(t, rh);
+    const idx = LEVELS.indexOf(l);
+    const upper = LEVELS[Math.max(0,idx-1)].hpa, lower = LEVELS[Math.min(LEVELS.length-1,idx+1)].hpa;
+    const wsU = h[`wind_speed_${upper}hPa`][i], wsL = h[`wind_speed_${lower}hPa`][i];
+    const tb = turbulenceIndex(ws, wsU, wsL);
+    return {l, t, rh, ws, wd, cc, ic, tb};
+  });
+
+  let html = `<div id="profile-header">
+      <span class="coords">${lat.toFixed(2)}°, ${lon.toFixed(2)}°</span>
+      <span class="close" onclick="closeProfile()">✕</span>
+    </div>`;
+  html += rows.map(r=>{
+    const isCurrent = LEVELS.indexOf(r.l) === currentLevelIdx;
+    const cloudPct = Math.min(100, r.cc);
+    const icPct = Math.round(r.ic*100);
+    const tbPct = Math.round(r.tb*100);
+    return `<div class="profile-row${isCurrent?' hilite':''}">
+      <span class="fl">${r.l.fl}</span>
+      <span class="bars">
+        <span class="bar" title="cloud ${cloudPct}%" style="height:${Math.max(2,cloudPct*0.14)}px;background:#6f8ca6;"></span>
+        <span class="bar" title="icing" style="height:${Math.max(2,icPct*0.14)}px;background:${icPct>50?'#ff4d4d':icPct>15?'#c98a2e':'#2e6b5e'};"></span>
+        <span class="bar" title="turbulence" style="height:${Math.max(2,tbPct*0.14)}px;background:${tbPct>50?'#ff4d4d':tbPct>15?'#c98a2e':'#2e6b5e'};"></span>
+      </span>
+      <span class="val">${Math.round(r.t)}°</span>
+      <span class="val">${Math.round(r.ws)}kt</span>
+    </div>`;
+  }).join('');
+  html += `<div id="profile-legend">
+    <span><i style="background:#6f8ca6;"></i>cloud</span>
+    <span><i style="background:#c98a2e;"></i>icing</span>
+    <span><i style="background:#c98a2e;"></i>turb (est.)</span>
+  </div>
+  <div class="hint" style="margin-top:12px;">CAPE: <b>${Math.round(h.cape[i])} J/kg</b> · Surface vis: <b>${(h.visibility[i]/1000).toFixed(1)} km</b></div>
+  <div class="hint" style="margin-top:8px;font-size:10px;">Icing/turbulence are derived estimates from temperature, humidity and wind shear — not a certified aviation hazard product. Verify against official dispatch weather.</div>`;
+
+  document.getElementById('inspector').innerHTML = html;
+}
+window.closeProfile = function(){
+  if(markerLayer){ map.removeLayer(markerLayer); markerLayer=null; }
+  document.getElementById('inspector').innerHTML = `<div class="hint" id="inspector-hint">
+    <b>Tap anywhere on the map</b> to pull a full vertical profile at that point —
+    icing risk, turbulence estimate, cloud cover and wind from surface to FL450.
+  </div>`;
+};
+
+/* ============================= SEARCH ============================= */
+document.getElementById('search-input').addEventListener('keydown', (e)=>{
+  if(e.key !== 'Enter') return;
+  const q = e.target.value.trim();
+  if(!q) return;
+  setStatus('searching…', true);
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)
+    .then(r=>r.json())
+    .then(res=>{
+      if(res && res[0]){
+        map.setView([+res[0].lat, +res[0].lon], 6);
+        setStatus('idle', false);
+      } else {
+        setStatus('not found', false);
+      }
+    }).catch(()=>setStatus('search error', false));
+});
+
+/* init default layer */
+setActiveLayer('satellite');
+</script>
+</body>
+</html>
