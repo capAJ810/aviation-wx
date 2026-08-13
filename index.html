@@ -173,6 +173,67 @@
   ::-webkit-scrollbar-thumb{background:#2a3140;border-radius:3px;}
 
   .grid-pt-icon{background:none;border:none;}
+
+  /* ---- TIME BAR ---- */
+  #timebar{position:absolute;left:110px;right:76px;bottom:16px;z-index:500;
+    background:rgba(10,13,18,.92);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:6px;box-shadow:var(--shadow);backdrop-filter:blur(6px);}
+  #timebar-track{display:flex;gap:4px;}
+  .time-btn{flex:1;background:transparent;border:none;color:var(--text-dim);border-radius:5px;
+    padding:8px 4px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:.15s;}
+  .time-btn:hover{background:rgba(255,255,255,.05);color:var(--text);}
+  .time-btn:active{transform:scale(.94);}
+  .time-btn.active{background:var(--amber);color:var(--bg);box-shadow:0 0 10px rgba(255,176,0,.4);}
+  @media (max-width:760px){ #timebar{left:98px;right:60px;bottom:16px;} .time-btn{font-size:9.5px;padding:8px 2px;} }
+
+  /* ---- ROUTE PLANNING ---- */
+  #route-section{padding:14px 14px 4px;border-bottom:1px solid var(--line);}
+  #route-inputs{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  #route-inputs input{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    color:var(--text);padding:9px 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;
+    text-transform:uppercase;outline:none;transition:border-color .15s;}
+  #route-inputs input:focus{border-color:var(--amber);}
+  #route-inputs input::placeholder{color:var(--text-dim);text-transform:none;}
+  #route-actions{display:flex;gap:6px;margin-top:7px;}
+  .action-btn{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    color:var(--text-dim);padding:9px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;
+    letter-spacing:.03em;cursor:pointer;transition:.15s;}
+  .action-btn:hover{border-color:#3a4356;color:var(--text);}
+  .action-btn:active{transform:scale(.96);}
+  .action-btn.primary{background:rgba(255,176,0,.12);border-color:var(--amber-dim);color:var(--amber);}
+  .action-btn.primary:hover{background:rgba(255,176,0,.18);}
+
+  /* ---- FAVORITES ---- */
+  #favorites-section{padding:14px 14px 4px;border-bottom:1px solid var(--line);}
+  .fav-item{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);
+    border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:6px;
+    cursor:pointer;transition:.15s;}
+  .fav-item:hover{border-color:#3a4356;}
+  .fav-item .icao{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--amber);font-size:13px;}
+  .fav-item .fname{font-size:9.5px;color:var(--text-dim);display:block;margin-top:1px;}
+  .fav-item .fav-remove{color:var(--text-dim);font-size:14px;padding:2px 6px;}
+  .fav-item .fav-remove:hover{color:var(--red);}
+
+  /* ---- AIRPORT / METAR-TAF PANEL ---- */
+  #airport-panel .apt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  #airport-panel .apt-icao{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--amber);}
+  #airport-panel .apt-name{font-size:10.5px;color:var(--text-dim);margin-bottom:12px;}
+  #airport-panel .star-btn{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    color:var(--text-dim);width:34px;height:34px;font-size:16px;cursor:pointer;transition:.15s;}
+  #airport-panel .star-btn.saved{color:var(--amber);border-color:var(--amber-dim);}
+  #airport-panel .star-btn:active{transform:scale(.9);}
+  .wx-block{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:10px 12px;margin-bottom:10px;}
+  .wx-block .wx-label{font-size:9.5px;color:var(--text-dim);letter-spacing:.08em;margin-bottom:5px;}
+  .wx-block .wx-raw{font-size:11px;color:var(--text);line-height:1.6;word-break:break-word;}
+
+  /* ---- ROUTE SUMMARY ---- */
+  .route-summary-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .route-summary-head .rs-title{font-size:12px;color:var(--cyan);font-weight:600;}
+  .route-wp{display:grid;grid-template-columns:44px 1fr 30px;gap:8px;align-items:center;
+    padding:6px 0;border-bottom:1px solid var(--line);font-size:11px;}
+  .route-wp .rw-dist{color:var(--text-dim);}
+  .route-wp .rw-risk{text-align:right;font-weight:700;}
 </style>
 </head>
 <body>
@@ -190,6 +251,9 @@
       <div id="tape-caption">ALTITUDE<br><span id="tape-caption-val">SFC</span></div>
     </div>
     <button id="panel-open-btn" onclick="document.getElementById('panel').classList.add('open')">☰</button>
+    <div id="timebar">
+      <div id="timebar-track"></div>
+    </div>
   </div>
 
   <div id="panel">
@@ -203,6 +267,24 @@
 
     <div id="search-box">
       <input id="search-input" type="text" placeholder="Jump to place or ICAO...">
+    </div>
+
+    <div id="route-section">
+      <div class="section-label">Route planning</div>
+      <div id="route-inputs">
+        <input id="route-from" type="text" placeholder="FROM (ICAO)" maxlength="4">
+        <input id="route-to" type="text" placeholder="TO (ICAO)" maxlength="4">
+      </div>
+      <div id="route-actions">
+        <button id="route-plan-btn" class="action-btn primary">Plan Route</button>
+        <button id="route-clear-btn" class="action-btn" style="display:none;">Clear</button>
+      </div>
+      <div id="route-status" class="hint" style="font-size:10px;margin-top:6px;"></div>
+    </div>
+
+    <div id="favorites-section" style="display:none;">
+      <div class="section-label">Favorites</div>
+      <div id="favorites-list"></div>
     </div>
 
     <div id="layers">
@@ -228,6 +310,7 @@
         <div class="hint" id="inspector-hint">
           <b>Tap anywhere on the map</b> to pull a full vertical profile at that point —
           icing risk, turbulence estimate, cloud cover and wind from surface to FL450.
+          Or search an ICAO code for METAR/TAF.
         </div>
       </div>
     </div>
@@ -276,6 +359,10 @@ let gridLayerGroup = null;
 let tileLayer = null;
 let debounceTimer = null;
 
+/* time-ahead offsets for the forecast timeline */
+const TIME_STEPS = [0, 3, 6, 12, 24, 48]; // hours ahead
+let selectedHourOffset = 0;
+
 /* ============================= MAP INIT ============================= */
 const map = L.map('map', {zoomControl:false, worldCopyJump:true, minZoom:2}).setView([25.2, 55.3], 5); // UAE-ish default
 L.control.zoom({position:'bottomright'}).addTo(map);
@@ -285,8 +372,37 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
 
 gridLayerGroup = L.layerGroup().addTo(map);
 let markerLayer = null;
+let airportMarker = null;
+let routeLayerGroup = L.layerGroup().addTo(map);
+let lastProfileLatLng = null;
+
+/* ---- time bar build ---- */
+const timebarTrack = document.getElementById('timebar-track');
+TIME_STEPS.forEach((h, i)=>{
+  const btn = document.createElement('button');
+  btn.className = 'time-btn' + (i===0 ? ' active' : '');
+  btn.textContent = h===0 ? 'NOW' : `+${h}H`;
+  btn.dataset.h = h;
+  btn.addEventListener('click', ()=>setTimeOffset(h));
+  timebarTrack.appendChild(btn);
+});
+function setTimeOffset(h){
+  selectedHourOffset = h;
+  document.querySelectorAll('.time-btn').forEach(b=>b.classList.toggle('active', +b.dataset.h===h));
+  if(activeLayer && activeLayer!=='satellite' && activeLayer!=='radar') refreshLayer();
+  if(lastProfileLatLng) loadProfile(lastProfileLatLng.lat, lastProfileLatLng.lng);
+}
+function targetTime(){
+  return new Date(Date.now() + selectedHourOffset*3600*1000);
+}
+function findHourIndex(times){
+  const target = targetTime().getTime();
+  let i = times.findIndex(t => new Date(t).getTime() >= target);
+  return i < 0 ? times.length-1 : i;
+}
 
 /* ============================= UI BUILD ============================= */
+
 function layerBtnHtml(l){
   const tagClass = l.tag === 'derived' ? 'derived' : 'live';
   const tagText = l.tag === 'derived' ? 'EST' : 'LIVE';
@@ -483,7 +599,7 @@ function loadGridLayer(id){
   const lats = pts.map(p=>p[0].toFixed(3)).join(',');
   const lons = pts.map(p=>p[1].toFixed(3)).join(',');
   const vars = hourlyVarsForLayer(id).join(',');
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=1&timezone=UTC`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=3&timezone=UTC`;
 
   fetch(url).then(async r=>{
     const data = await r.json();
@@ -494,13 +610,10 @@ function loadGridLayer(id){
   }).then(data=>{
     const arr = Array.isArray(data) ? data : [data];
     gridLayerGroup.clearLayers();
-    const now = new Date(); now.setMinutes(0,0,0);
     const samples = [];
     arr.forEach((station, i)=>{
       if(!station.hourly) return;
-      const times = station.hourly.time;
-      let hIdx = times.findIndex(t => new Date(t).getTime() >= now.getTime());
-      if(hIdx < 0) hIdx = 0;
+      const hIdx = findHourIndex(station.hourly.time);
       const val = computeValue(id, station.hourly, hIdx);
       if(val === null || isNaN(val)) return;
       if(id === 'wind'){
@@ -509,7 +622,8 @@ function loadGridLayer(id){
       samples.push({lat:pts[i][0], lon:pts[i][1], val});
     });
     if(id !== 'wind' && samples.length) renderSmoothOverlay(id, samples, bounds);
-    setStatus(`${id} · ${samples.length}/${arr.length} samples`, false);
+    const timeLabel = selectedHourOffset===0 ? 'now' : `+${selectedHourOffset}h`;
+    setStatus(`${id} · ${timeLabel} · ${samples.length}/${arr.length} samples`, false);
   }).catch(err=>{
     console.error(err);
     setStatus(`error: ${err.message}`.slice(0,60), false);
@@ -645,9 +759,10 @@ map.on('click', (e)=>{
 });
 
 function loadProfile(lat, lon){
+  lastProfileLatLng = {lat, lng:lon};
   document.getElementById('inspector').innerHTML = `<div id="empty-state"><div class="icon">◌</div><div class="hint">Loading vertical profile…</div></div>`;
   const levelVars = LEVELS.map(l=>`temperature_${l.hpa}hPa,relative_humidity_${l.hpa}hPa,wind_speed_${l.hpa}hPa,wind_direction_${l.hpa}hPa,cloud_cover_${l.hpa}hPa`).join(',');
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility&forecast_days=1&timezone=UTC`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility&forecast_days=3&timezone=UTC`;
 
   if(markerLayer) map.removeLayer(markerLayer);
   markerLayer = L.circleMarker([lat,lon], {radius:6, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
@@ -660,9 +775,7 @@ function loadProfile(lat, lon){
     return data;
   }).then(data=>{
     const h = data.hourly;
-    const now = new Date(); now.setMinutes(0,0,0);
-    let i = h.time.findIndex(t => new Date(t).getTime() >= now.getTime());
-    if(i<0) i=0;
+    const i = findHourIndex(h.time);
     renderProfile(lat, lon, h, i);
   }).catch(err=>{
     console.error(err);
@@ -717,20 +830,25 @@ function renderProfile(lat, lon, h, i){
 }
 window.closeProfile = function(){
   if(markerLayer){ map.removeLayer(markerLayer); markerLayer=null; }
+  lastProfileLatLng = null;
   document.getElementById('inspector').innerHTML = `<div id="empty-state">
     <div class="icon">✛</div>
     <div class="hint" id="inspector-hint">
       <b>Tap anywhere on the map</b> to pull a full vertical profile at that point —
       icing risk, turbulence estimate, cloud cover and wind from surface to FL450.
+      Or search an ICAO code for METAR/TAF.
     </div>
   </div>`;
 };
 
-/* ============================= SEARCH ============================= */
+/* ============================= SEARCH (place name OR ICAO) ============================= */
+function looksLikeIcao(s){ return /^[A-Za-z]{4}$/.test(s.trim()); }
+
 document.getElementById('search-input').addEventListener('keydown', (e)=>{
   if(e.key !== 'Enter') return;
   const q = e.target.value.trim();
   if(!q) return;
+  if(looksLikeIcao(q)){ showAirport(q); return; }
   setStatus('searching…', true);
   fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`)
     .then(r=>r.json())
@@ -743,6 +861,235 @@ document.getElementById('search-input').addEventListener('keydown', (e)=>{
       }
     }).catch(()=>setStatus('search error', false));
 });
+
+/* ============================= AIRPORT / METAR-TAF ============================= */
+async function fetchAirportWx(icaoRaw){
+  const icao = icaoRaw.trim().toUpperCase();
+  const metarRes = await fetch(`https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`);
+  if(!metarRes.ok) throw new Error(`METAR lookup failed (HTTP ${metarRes.status})`);
+  const metarData = await metarRes.json();
+  if(!metarData || !metarData.length) throw new Error(`No station found for ${icao}`);
+  const m = metarData[0];
+  let rawTaf = 'No TAF available for this station.';
+  try{
+    const tafRes = await fetch(`https://aviationweather.gov/api/data/taf?ids=${icao}&format=raw`);
+    if(tafRes.ok){
+      const txt = (await tafRes.text()).trim();
+      if(txt) rawTaf = txt;
+    }
+  }catch(e){ /* TAF optional — METAR is the essential piece */ }
+  return {
+    icao, name: m.name || icao, lat: m.lat, lon: m.lon,
+    rawMetar: m.rawOb || '(no raw text returned)', rawTaf
+  };
+}
+
+window.showAirport = function(icaoRaw){
+  const icao = icaoRaw.trim().toUpperCase();
+  setStatus(`loading ${icao}…`, true);
+  document.getElementById('inspector').innerHTML = `<div id="empty-state"><div class="icon">◌</div><div class="hint">Loading ${icao} METAR/TAF…</div></div>`;
+  fetchAirportWx(icao).then(apt=>{
+    map.setView([apt.lat, apt.lon], 8);
+    if(airportMarker) map.removeLayer(airportMarker);
+    airportMarker = L.circleMarker([apt.lat, apt.lon], {radius:7, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
+    renderAirportPanel(apt);
+    setStatus(`${icao} · loaded`, false);
+  }).catch(err=>{
+    console.error(err);
+    document.getElementById('inspector').innerHTML = `<div class="hint">Could not load ${icao} — ${err.message}. Check the ICAO code is correct (e.g. OMDB, KJFK, EGLL).</div>`;
+    setStatus('lookup error', false);
+  });
+};
+
+function renderAirportPanel(apt){
+  const saved = isFavorite(apt.icao);
+  document.getElementById('inspector').innerHTML = `
+    <div id="airport-panel">
+      <div class="apt-head">
+        <div><span class="apt-icao">${apt.icao}</span></div>
+        <button class="star-btn${saved?' saved':''}" onclick="toggleFavoriteFromPanel('${apt.icao}','${(apt.name||'').replace(/'/g,"\\'")}',${apt.lat},${apt.lon})">${saved?'★':'☆'}</button>
+      </div>
+      <div class="apt-name">${apt.name || ''}</div>
+      <div class="wx-block">
+        <div class="wx-label">METAR</div>
+        <div class="wx-raw">${apt.rawMetar}</div>
+      </div>
+      <div class="wx-block">
+        <div class="wx-label">TAF</div>
+        <div class="wx-raw">${apt.rawTaf}</div>
+      </div>
+      <div class="hint" style="font-size:10px;">Live from NOAA Aviation Weather Center — official data, unmodified.</div>
+    </div>`;
+}
+
+/* ============================= FAVORITES (saved in this browser) ============================= */
+function getFavorites(){
+  try{ return JSON.parse(localStorage.getItem('altitude_favorites')||'[]'); }catch(e){ return []; }
+}
+function saveFavoritesList(arr){
+  localStorage.setItem('altitude_favorites', JSON.stringify(arr));
+  renderFavoritesList();
+}
+function isFavorite(icao){ return getFavorites().some(f=>f.icao===icao); }
+window.toggleFavoriteFromPanel = function(icao, name, lat, lon){
+  let favs = getFavorites();
+  if(isFavorite(icao)){
+    favs = favs.filter(f=>f.icao!==icao);
+  } else {
+    favs.push({icao, name, lat, lon});
+  }
+  saveFavoritesList(favs);
+  const btn = document.querySelector('#airport-panel .star-btn');
+  if(btn){
+    const nowSaved = isFavorite(icao);
+    btn.classList.toggle('saved', nowSaved);
+    btn.textContent = nowSaved ? '★' : '☆';
+  }
+};
+window.removeFavorite = function(icao){
+  saveFavoritesList(getFavorites().filter(f=>f.icao!==icao));
+};
+function renderFavoritesList(){
+  const favs = getFavorites();
+  const section = document.getElementById('favorites-section');
+  if(!favs.length){ section.style.display='none'; return; }
+  section.style.display='block';
+  document.getElementById('favorites-list').innerHTML = favs.map(f=>`
+    <div class="fav-item" onclick="showAirport('${f.icao}')">
+      <div><span class="icao">${f.icao}</span><span class="fname">${(f.name||'').slice(0,36)}</span></div>
+      <span class="fav-remove" onclick="event.stopPropagation(); removeFavorite('${f.icao}')">✕</span>
+    </div>`).join('');
+}
+renderFavoritesList();
+
+/* ============================= ROUTE PLANNING ============================= */
+function toRad(d){ return d*Math.PI/180; }
+function toDeg(r){ return r*180/Math.PI; }
+function greatCirclePoint(lat1,lon1,lat2,lon2,f){
+  const φ1=toRad(lat1), λ1=toRad(lon1), φ2=toRad(lat2), λ2=toRad(lon2);
+  const d = 2*Math.asin(Math.sqrt(Math.sin((φ2-φ1)/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin((λ2-λ1)/2)**2));
+  if(d === 0) return [lat1, lon1];
+  const A = Math.sin((1-f)*d)/Math.sin(d), B = Math.sin(f*d)/Math.sin(d);
+  const x = A*Math.cos(φ1)*Math.cos(λ1) + B*Math.cos(φ2)*Math.cos(λ2);
+  const y = A*Math.cos(φ1)*Math.sin(λ1) + B*Math.cos(φ2)*Math.sin(λ2);
+  const z = A*Math.sin(φ1) + B*Math.sin(φ2);
+  return [toDeg(Math.atan2(z, Math.sqrt(x*x+y*y))), toDeg(Math.atan2(y,x))];
+}
+function greatCircleDistNm(lat1,lon1,lat2,lon2){
+  const φ1=toRad(lat1), λ1=toRad(lon1), φ2=toRad(lat2), λ2=toRad(lon2);
+  const d = 2*Math.asin(Math.sqrt(Math.sin((φ2-φ1)/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin((λ2-λ1)/2)**2));
+  return d * 3440.065;
+}
+
+document.getElementById('route-plan-btn').addEventListener('click', planRoute);
+document.getElementById('route-clear-btn').addEventListener('click', clearRoute);
+
+async function planRoute(){
+  const fromIcao = document.getElementById('route-from').value.trim().toUpperCase();
+  const toIcao = document.getElementById('route-to').value.trim().toUpperCase();
+  const statusEl = document.getElementById('route-status');
+  if(!looksLikeIcao(fromIcao) || !looksLikeIcao(toIcao)){
+    statusEl.textContent = 'Enter valid 4-letter ICAO codes for both airports.';
+    return;
+  }
+  statusEl.textContent = 'Resolving airports…';
+  document.getElementById('route-plan-btn').disabled = true;
+  try{
+    const [from, to] = await Promise.all([fetchAirportWx(fromIcao), fetchAirportWx(toIcao)]);
+    const totalNm = greatCircleDistNm(from.lat, from.lon, to.lat, to.lon);
+    const N = totalNm > 1200 ? 9 : totalNm > 400 ? 7 : 5;
+    const waypoints = [];
+    for(let i=0;i<N;i++){
+      const f = i/(N-1);
+      const [lat,lon] = greatCirclePoint(from.lat, from.lon, to.lat, to.lon, f);
+      waypoints.push({lat, lon, distNm: totalNm*f});
+    }
+    statusEl.textContent = `Sampling weather along ${Math.round(totalNm)}nm route at ${LEVELS[currentLevelIdx].fl}…`;
+
+    const lvl = LEVELS[currentLevelIdx].hpa;
+    const lats = waypoints.map(w=>w.lat.toFixed(3)).join(',');
+    const lons = waypoints.map(w=>w.lon.toFixed(3)).join(',');
+    const vars = `temperature_${lvl}hPa,relative_humidity_${lvl}hPa,wind_speed_${lvl}hPa,wind_direction_${lvl}hPa,cloud_cover_${lvl}hPa`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=3&timezone=UTC`;
+    const wxRes = await fetch(url);
+    const wxData = await wxRes.json();
+    const stations = Array.isArray(wxData) ? wxData : [wxData];
+
+    stations.forEach((st, i)=>{
+      if(!st.hourly){ waypoints[i].risk = null; return; }
+      const hIdx = findHourIndex(st.hourly.time);
+      const t = st.hourly[`temperature_${lvl}hPa`][hIdx];
+      const rh = st.hourly[`relative_humidity_${lvl}hPa`][hIdx];
+      const ws = st.hourly[`wind_speed_${lvl}hPa`][hIdx];
+      const wd = st.hourly[`wind_direction_${lvl}hPa`][hIdx];
+      const cc = st.hourly[`cloud_cover_${lvl}hPa`][hIdx];
+      waypoints[i] = {...waypoints[i], temp:t, wind:ws, windDir:wd, cloud:cc,
+        icing: icingIndex(t, rh)};
+    });
+    // simple turbulence proxy along route: wind-speed differences between consecutive waypoints
+    waypoints.forEach((w,i)=>{
+      const prev = waypoints[Math.max(0,i-1)].wind ?? w.wind;
+      const next = waypoints[Math.min(waypoints.length-1,i+1)].wind ?? w.wind;
+      w.turb = turbulenceIndex(w.wind ?? 0, prev, next);
+    });
+
+    drawRoute(waypoints, from, to);
+    renderRouteSummary(waypoints, from, to, totalNm);
+    statusEl.textContent = `${Math.round(totalNm)}nm · ${LEVELS[currentLevelIdx].fl} · ${selectedHourOffset===0?'now':'+'+selectedHourOffset+'h'}`;
+    document.getElementById('route-clear-btn').style.display = 'block';
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = `Route error — ${err.message}`;
+  }
+  document.getElementById('route-plan-btn').disabled = false;
+}
+
+function drawRoute(waypoints, from, to){
+  routeLayerGroup.clearLayers();
+  const latlngs = waypoints.map(w=>[w.lat,w.lon]);
+  L.polyline(latlngs, {color:'#4fd8c9', weight:2.5, opacity:0.85, dashArray:'6 5'}).addTo(routeLayerGroup);
+  waypoints.forEach(w=>{
+    const risk = Math.max(w.icing||0, w.turb||0);
+    const color = risk>0.5 ? '#ff4d4d' : risk>0.2 ? '#e8a838' : '#4fd8c9';
+    L.circleMarker([w.lat,w.lon], {radius:5, color:'#0a0d12', weight:1.5, fillColor:color, fillOpacity:1}).addTo(routeLayerGroup);
+  });
+  L.marker([from.lat, from.lon], {icon:L.divIcon({className:'grid-pt-icon',
+    html:`<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:#ffb000;text-shadow:0 1px 3px #000;">${from.icao}</div>`,
+    iconSize:[60,18], iconAnchor:[-4,20]})}).addTo(routeLayerGroup);
+  L.marker([to.lat, to.lon], {icon:L.divIcon({className:'grid-pt-icon',
+    html:`<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:#ffb000;text-shadow:0 1px 3px #000;">${to.icao}</div>`,
+    iconSize:[60,18], iconAnchor:[-4,20]})}).addTo(routeLayerGroup);
+  map.fitBounds(L.polyline(latlngs).getBounds(), {padding:[60,60]});
+}
+
+function renderRouteSummary(waypoints, from, to, totalNm){
+  const rows = waypoints.map(w=>{
+    const riskVal = Math.max(w.icing||0, w.turb||0);
+    const riskLabel = riskVal>0.66?'SEV':riskVal>0.33?'MOD':riskVal>0.05?'LGT':'NIL';
+    const riskColor = riskVal>0.5?'var(--red)':riskVal>0.2?'#e8a838':'var(--cyan)';
+    return `<div class="route-wp">
+      <span class="rw-dist">${Math.round(w.distNm)}nm</span>
+      <span>${w.temp!==undefined?Math.round(w.temp)+'° · '+Math.round(w.wind)+'kt · '+Math.round(w.cloud)+'% cld':'—'}</span>
+      <span class="rw-risk" style="color:${riskColor};">${riskLabel}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('inspector').innerHTML = `
+    <div class="route-summary-head">
+      <span class="rs-title">${from.icao} → ${to.icao}</span>
+      <span style="color:var(--text-dim);font-size:11px;">${Math.round(totalNm)}nm</span>
+    </div>
+    ${rows}
+    <div class="hint" style="margin-top:12px;font-size:10px;">Route weather sampled at ${LEVELS[currentLevelIdx].fl} along the great-circle track. Icing/turbulence are derived estimates — not a certified hazard product. Re-run Plan Route after changing altitude or time to refresh.</div>`;
+}
+
+function clearRoute(){
+  routeLayerGroup.clearLayers();
+  document.getElementById('route-from').value = '';
+  document.getElementById('route-to').value = '';
+  document.getElementById('route-status').textContent = '';
+  document.getElementById('route-clear-btn').style.display = 'none';
+  closeProfile();
+}
 
 /* init default layer */
 setActiveLayer('satellite');
