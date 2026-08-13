@@ -396,6 +396,23 @@ let radarFrameIdx = 0;
 let radarTimer = null;
 let debounceTimer = null;
 
+/* Cache Open-Meteo responses briefly — the underlying model data itself only updates every
+   hour or so, so a short cache avoids hammering the free rate limit without costing real
+   freshness. Keyed by the exact request URL, so different layer/altitude/area/time
+   combinations each get their own cache entry. */
+const OM_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const omCache = new Map();
+async function cachedOpenMeteoFetch(url){
+  const hit = omCache.get(url);
+  if(hit && (Date.now() - hit.time) < OM_CACHE_TTL) return hit.data;
+  const r = await fetch(url);
+  const data = await r.json();
+  if(!r.ok || data.error) throw new Error(data.reason || `HTTP ${r.status}`);
+  omCache.set(url, {data, time: Date.now()});
+  if(omCache.size > 150) omCache.delete(omCache.keys().next().value); // evict oldest, keep memory bounded
+  return data;
+}
+
 /* time-ahead offsets for the forecast timeline */
 const TIME_STEPS = [0, 3, 6, 12, 24, 48]; // hours ahead
 let selectedHourOffset = 0;
@@ -672,13 +689,7 @@ function loadGridLayer(id){
   const vars = hourlyVarsForLayer(id).join(',');
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=3&timezone=UTC`;
 
-  fetch(url).then(async r=>{
-    const data = await r.json();
-    if(!r.ok || data.error){
-      throw new Error(data.reason || `HTTP ${r.status}`);
-    }
-    return data;
-  }).then(data=>{
+  cachedOpenMeteoFetch(url).then(data=>{
     const arr = Array.isArray(data) ? data : [data];
     gridLayerGroup.clearLayers();
     const samples = [];
@@ -853,13 +864,7 @@ function loadProfile(lat, lon){
   if(markerLayer) map.removeLayer(markerLayer);
   markerLayer = L.circleMarker([lat,lon], {radius:6, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
 
-  fetch(url).then(async r=>{
-    const data = await r.json();
-    if(!r.ok || data.error){
-      throw new Error(data.reason || `HTTP ${r.status}`);
-    }
-    return data;
-  }).then(data=>{
+  cachedOpenMeteoFetch(url).then(data=>{
     const h = data.hourly;
     const i = findHourIndex(h.time);
     renderProfile(lat, lon, h, i);
@@ -1131,8 +1136,7 @@ async function planRoute(){
     const lons = waypoints.map(w=>w.lon.toFixed(3)).join(',');
     const vars = `temperature_${lvl}hPa,relative_humidity_${lvl}hPa,wind_speed_${lvl}hPa,wind_direction_${lvl}hPa,cloud_cover_${lvl}hPa`;
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=${vars}&forecast_days=3&timezone=UTC`;
-    const wxRes = await fetch(url);
-    const wxData = await wxRes.json();
+    const wxData = await cachedOpenMeteoFetch(url);
     const stations = Array.isArray(wxData) ? wxData : [wxData];
 
     stations.forEach((st, i)=>{
