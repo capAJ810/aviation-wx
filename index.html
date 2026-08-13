@@ -1420,15 +1420,20 @@ function renderAirportDots(){
   let count = 0;
   for(const apt of airportDB){
     if(apt.lat < b.getSouth() || apt.lat > b.getNorth() || apt.lon < b.getWest() || apt.lon > b.getEast()) continue;
-    const marker = L.circleMarker([apt.lat, apt.lon], {
-      radius: apt.type==='large_airport' ? 5 : 3.5,
-      color:'#0a0d12', weight:1.5,
-      fillColor: apt.type==='large_airport' ? '#ffb000' : '#4fd8c9',
-      fillOpacity:1,
-      bubblingMouseEvents:false // Leaflet Path layers forward clicks to the map by default via
-                                 // their own internal mechanism — separate from real DOM bubbling,
-                                 // so stopPropagation() alone doesn't block it. This option does.
+    const isLarge = apt.type==='large_airport';
+    const dotColor = isLarge ? '#ffb000' : '#4fd8c9';
+    // 34x34 invisible tap zone with a small visible dot centered inside it — the visible
+    // dot stays precise-looking, but the actual touchable area is much bigger, which is
+    // what taps were actually missing before (not a click-handling bug, just too small a target)
+    const icon = L.divIcon({
+      className:'airport-dot-icon',
+      html:`<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
+              <div style="width:${isLarge?10:7}px;height:${isLarge?10:7}px;border-radius:50%;
+                background:${dotColor};border:1.5px solid #0a0d12;box-shadow:0 1px 3px rgba(0,0,0,.6);"></div>
+            </div>`,
+      iconSize:[34,34], iconAnchor:[17,17]
     });
+    const marker = L.marker([apt.lat, apt.lon], {icon, keyboard:false});
     marker.on('click', ()=> showAirportDetailPanel(apt));
     marker.addTo(airportDotsGroup);
     count++;
