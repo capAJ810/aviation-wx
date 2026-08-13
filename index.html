@@ -470,6 +470,11 @@ let markerLayer = null;
 let airportMarker = null;
 let routeLayerGroup = L.layerGroup().addTo(map);
 let lastProfileLatLng = null;
+/* Shared request token: any async operation that ends by writing to #inspector (airport
+   search, airport dots, point-profile clicks) checks its token is still current before
+   touching the DOM — so a slow request from an earlier click can never clobber a faster,
+   more recent one that already rendered. */
+let inspectorRequestId = 0;
 
 /* ---- time bar build ---- */
 const timebarTrack = document.getElementById('timebar-track');
@@ -1059,6 +1064,7 @@ map.on('click', (e)=>{
 
 function loadProfile(lat, lon){
   lastProfileLatLng = {lat, lng:lon};
+  const myRequest = ++inspectorRequestId;
   document.getElementById('inspector').innerHTML = `<div id="empty-state"><div class="icon">◌</div><div class="hint">Loading vertical profile…</div></div>`;
   const levelVars = LEVELS.map(l=>`temperature_${l.hpa}hPa,relative_humidity_${l.hpa}hPa,wind_speed_${l.hpa}hPa,wind_direction_${l.hpa}hPa,cloud_cover_${l.hpa}hPa`).join(',');
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility,weather_code,precipitation&forecast_days=3&timezone=UTC`;
@@ -1077,10 +1083,12 @@ function loadProfile(lat, lon){
   });
 
   cachedOpenMeteoFetch(url).then(data=>{
+    if(myRequest !== inspectorRequestId) return;
     const h = data.hourly;
     const i = findHourIndex(h.time);
     renderProfile(lat, lon, h, i);
   }).catch(err=>{
+    if(myRequest !== inspectorRequestId) return;
     console.error(err);
     document.getElementById('inspector').innerHTML = `<div class="hint">Could not load profile — ${err.message}</div>`;
   });
@@ -1230,15 +1238,18 @@ async function fetchAirportWx(icaoRaw){
 
 window.showAirport = function(icaoRaw){
   const icao = icaoRaw.trim().toUpperCase();
+  const myRequest = ++inspectorRequestId;
   setStatus(`loading ${icao}…`, true);
   document.getElementById('inspector').innerHTML = `<div id="empty-state"><div class="icon">◌</div><div class="hint">Loading ${icao} METAR/TAF…</div></div>`;
   fetchAirportWx(icao).then(apt=>{
+    if(myRequest !== inspectorRequestId) return; // a newer request already took over
     map.setView([apt.lat, apt.lon], 8);
     if(airportMarker) map.removeLayer(airportMarker);
     airportMarker = L.circleMarker([apt.lat, apt.lon], {radius:7, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
     renderAirportPanel(apt);
     setStatus(`${icao} · loaded`, false);
   }).catch(err=>{
+    if(myRequest !== inspectorRequestId) return;
     console.error(err);
     document.getElementById('inspector').innerHTML = `<div class="hint">Could not load ${icao} — ${err.message}. Check the ICAO code is correct (e.g. OMDB, KJFK, EGLL).</div>`;
     setStatus('lookup error', false);
@@ -1451,6 +1462,7 @@ document.getElementById('airport-dots-toggle').addEventListener('click', async (
 map.on('moveend zoomend', ()=>{ if(airportDotsActive) renderAirportDots(); });
 
 function showAirportDetailPanel(apt){
+  const myRequest = ++inspectorRequestId;
   const runwayRows = apt.runways.length
     ? apt.runways.map(r=>`
       <div class="rwy-row">
@@ -1481,8 +1493,9 @@ function showAirportDetailPanel(apt){
   const wxFallback = (apt.gpsCode && apt.gpsCode !== apt.ident) ? apt.gpsCode : null;
 
   const renderWx = (wx) => {
+    if(myRequest !== inspectorRequestId) return; // a newer click already took over
     const el = document.getElementById('airport-panel-wx');
-    if(!el) return; // user navigated away before this resolved
+    if(!el) return;
     const saved = isFavorite(wx.icao);
     el.outerHTML = `
       <div class="apt-head" style="margin-top:4px;">
@@ -1493,6 +1506,7 @@ function showAirportDetailPanel(apt){
       <div class="wx-block"><div class="wx-label">TAF</div><div class="wx-raw">${wx.rawTaf}</div></div>`;
   };
   const renderWxError = (msg) => {
+    if(myRequest !== inspectorRequestId) return;
     const el = document.getElementById('airport-panel-wx');
     if(el) el.textContent = msg;
   };
