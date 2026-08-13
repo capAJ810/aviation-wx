@@ -875,21 +875,27 @@ document.getElementById('search-go').addEventListener('click', runSearch);
 
 /* ============================= AIRPORT / METAR-TAF ============================= */
 /* aviationweather.gov's API doesn't send CORS headers, so a direct browser fetch is blocked —
-   route through a public CORS relay instead. corsUrl() also gives a graceful direct fallback in case
-   the relay changes/goes down; whichever succeeds first is used. */
-function corsUrl(target){
-  return `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`;
-}
+   route through public CORS relays instead. Free relays are individually flaky (rate limits,
+   occasional downtime), so race several in parallel — first success wins, only fails if all are down. */
+const CORS_RELAYS = [
+  target => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
+  target => `https://corsproxy.io/?url=${encodeURIComponent(target)}`,
+  target => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`,
+];
 async function fetchViaProxy(target, asText){
-  try{
-    const r = await fetch(corsUrl(target));
+  const attempts = [...CORS_RELAYS.map(fn => fn(target)), target];
+  const tryOne = async (url) => {
+    const r = await fetch(url);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    return asText ? await r.text() : await r.json();
-  }catch(e){
-    // fallback: try direct (works if the browser/extension already permits it, or NOAA adds CORS later)
-    const r2 = await fetch(target);
-    if(!r2.ok) throw new Error(`HTTP ${r2.status}`);
-    return asText ? await r2.text() : await r2.json();
+    const body = asText ? await r.text() : await r.json();
+    if(asText && !body.trim()) throw new Error('empty response');
+    return body;
+  };
+  try{
+    return await Promise.any(attempts.map(tryOne));
+  }catch(aggErr){
+    const reasons = (aggErr.errors || [aggErr]).map(e=>e.message).join('; ');
+    throw new Error(`all sources failed (${reasons})`);
   }
 }
 
@@ -898,11 +904,13 @@ async function fetchAirportWx(icaoRaw){
   const metarData = await fetchViaProxy(`https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`, false);
   if(!metarData || !metarData.length) throw new Error(`No station found for ${icao}`);
   const m = metarData[0];
-  let rawTaf = 'No TAF available for this station.';
+  let rawTaf = 'No TAF on file for this station in NOAA\'s system (international TAF coverage outside North America is incomplete — this may not reflect the airport\'s actual published TAF).';
   try{
     const txt = (await fetchViaProxy(`https://aviationweather.gov/api/data/taf?ids=${icao}&format=raw`, true)).trim();
     if(txt) rawTaf = txt;
-  }catch(e){ /* TAF optional — METAR is the essential piece */ }
+  }catch(e){
+    rawTaf = `Could not fetch TAF — ${e.message}. (METAR above is unaffected.)`;
+  }
   return {
     icao, name: m.name || icao, lat: m.lat, lon: m.lon,
     rawMetar: m.rawOb || '(no raw text returned)', rawTaf
