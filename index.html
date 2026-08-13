@@ -104,7 +104,9 @@
     #tape{width:52px;}
     #topbar{padding:12px 68px 12px 12px;}
     #topbar .chip:last-child{display:none;}
-    .layer-btn{padding:12px 10px;}
+    .layer-btn{padding:8px;}
+    .lb-thumb{height:52px;}
+    .lb-icon{font-size:21px;}
     .layer-btn .name{font-size:14px;}
     #panel-header{padding:16px 16px 12px;}
     #search-box input{padding:11px 12px 11px 34px;font-size:13px;}
@@ -117,16 +119,21 @@
   .section-label:first-child{margin-top:0;}
   #layer-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
   .layer-btn{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
-    padding:10px 10px;cursor:pointer;text-align:left;transition:.15s;position:relative;}
+    padding:7px;cursor:pointer;text-align:left;transition:.15s;position:relative;overflow:hidden;}
   .layer-btn:hover{border-color:#3a4356;transform:translateY(-1px);}
   .layer-btn:active{transform:scale(.97);}
   .layer-btn.active{border-color:var(--amber);background:rgba(255,176,0,.1);
     box-shadow:0 0 0 1px rgba(255,176,0,.25),0 2px 10px rgba(255,176,0,.12);}
-  .layer-btn.active::after{content:'●';position:absolute;top:8px;right:9px;color:var(--amber);font-size:8px;}
-  .layer-btn .name{font-family:'Barlow Condensed',sans-serif;font-size:13.5px;font-weight:600;
-    color:var(--text);letter-spacing:.02em;}
+  .layer-btn.active::after{content:'●';position:absolute;top:11px;right:11px;color:var(--amber);
+    font-size:9px;text-shadow:0 0 4px rgba(0,0,0,.8);z-index:1;}
+  .lb-thumb{height:46px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    margin-bottom:7px;position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);}
+  .lb-icon{font-size:19px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5));}
+  .layer-btn.active .lb-thumb{box-shadow:inset 0 0 0 1.5px rgba(255,176,0,.7);}
+  .layer-btn .name{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;
+    color:var(--text);letter-spacing:.02em;display:block;padding:0 2px;}
   .layer-btn.active .name{color:var(--amber);}
-  .layer-btn .tag{font-size:8px;color:var(--text-dim);letter-spacing:.05em;display:block;margin-top:2px;}
+  .layer-btn .tag{font-size:8px;color:var(--text-dim);letter-spacing:.05em;display:block;margin-top:2px;padding:0 2px;}
   .layer-btn .tag.derived{color:#c98a2e;}
   .layer-btn .tag.live{color:var(--cyan);}
 
@@ -362,23 +369,23 @@ let currentLevelIdx = 2; // default 850hPa
 const GRID_COLS = 7, GRID_ROWS = 5; // sample grid density (kept modest to stay well under API limits)
 
 const IMAGERY_LAYERS = [
-  {id:'satellite', name:'Satellite', tag:'live', altDependent:false},
-  {id:'radar',      name:'Rain Radar', tag:'live', altDependent:false},
+  {id:'satellite', name:'Satellite', tag:'live', altDependent:false, icon:'🛰', grad:'linear-gradient(135deg,#0e1f33,#3a6ea8)'},
+  {id:'radar',      name:'Rain Radar', tag:'live', altDependent:false, icon:'◎', grad:'linear-gradient(135deg,#123a2e,#2e8a5e,#e8a838)'},
 ];
 const ALT_LAYERS = [
-  {id:'clouds',     name:'Cloud Cover', tag:'live',    altDependent:true, unit:'%'},
-  {id:'temp',       name:'Temperature', tag:'live',    altDependent:true, unit:'°C'},
-  {id:'wind',       name:'Wind', tag:'live',           altDependent:true, unit:'kt'},
-  {id:'icing',      name:'Icing Risk', tag:'derived',  altDependent:true, unit:''},
-  {id:'turbulence', name:'Turbulence', tag:'derived',  altDependent:true, unit:''},
+  {id:'clouds',     name:'Cloud Cover', tag:'live',    altDependent:true, unit:'%', icon:'☁', grad:'linear-gradient(135deg,#1f2c3d,#6f8ca6)'},
+  {id:'temp',       name:'Temperature', tag:'live',    altDependent:true, unit:'°C', icon:'🌡', grad:'linear-gradient(135deg,#2050c0,#ff4d4d)'},
+  {id:'wind',       name:'Wind', tag:'live',           altDependent:true, unit:'kt', icon:'➤', grad:'linear-gradient(135deg,#124a5c,#4fd8c9)'},
+  {id:'icing',      name:'Icing Risk', tag:'derived',  altDependent:true, unit:'', icon:'❄', grad:'linear-gradient(135deg,#1e5c42,#ff4d4d)'},
+  {id:'turbulence', name:'Turbulence', tag:'derived',  altDependent:true, unit:'', icon:'〜', grad:'linear-gradient(135deg,#1e5c42,#e8a838,#ff4d4d)'},
 ];
 const SURFACE_LAYERS = [
-  {id:'visibility', name:'Visibility',  tag:'live',    altDependent:false, unit:'km'},
-  {id:'cape',       name:'CAPE Index',  tag:'live',    altDependent:false, unit:'J/kg'},
-  {id:'cloudbase',  name:'Cloud Base',  tag:'derived', altDependent:false, unit:'ft'},
-  {id:'thermals',   name:'Thermals',    tag:'derived', altDependent:false, unit:'ft'},
-  {id:'rain_accum', name:'Rain Accum',  tag:'live',    altDependent:false, unit:'mm'},
-  {id:'thunder',    name:'Thunderstorms', tag:'derived', altDependent:false, unit:''},
+  {id:'visibility', name:'Visibility',  tag:'live',    altDependent:false, unit:'km', icon:'◉', grad:'linear-gradient(135deg,#7a1f1f,#e8ecf1)'},
+  {id:'cape',       name:'CAPE Index',  tag:'live',    altDependent:false, unit:'J/kg', icon:'⚡', grad:'linear-gradient(135deg,#124a5c,#e8a838,#ff4d4d)'},
+  {id:'cloudbase',  name:'Cloud Base',  tag:'derived', altDependent:false, unit:'ft', icon:'⛅', grad:'linear-gradient(135deg,#2e8a8a,#e8ecf1)'},
+  {id:'thermals',   name:'Thermals',    tag:'derived', altDependent:false, unit:'ft', icon:'↑', grad:'linear-gradient(135deg,#124a5c,#ffb000)'},
+  {id:'rain_accum', name:'Rain Accum',  tag:'live',    altDependent:false, unit:'mm', icon:'💧', grad:'linear-gradient(135deg,#0e1f33,#4fd8c9,#8a5ee8)'},
+  {id:'thunder',    name:'Thunderstorms', tag:'derived', altDependent:false, unit:'', icon:'⛈', grad:'linear-gradient(135deg,#1e5c42,#e8a838,#ff4d4d)'},
 ];
 const ALL_LAYERS = [...IMAGERY_LAYERS, ...ALT_LAYERS, ...SURFACE_LAYERS];
 let activeLayer = null;
@@ -437,6 +444,7 @@ function layerBtnHtml(l){
   const tagClass = l.tag === 'derived' ? 'derived' : 'live';
   const tagText = l.tag === 'derived' ? 'EST' : 'LIVE';
   return `<div class="layer-btn" data-id="${l.id}">
+    <div class="lb-thumb" style="background:${l.grad};"><span class="lb-icon">${l.icon}</span></div>
     <span class="name">${l.name}</span>
     <span class="tag ${tagClass}">${tagText}${l.unit ? ' · '+l.unit : ''}</span>
   </div>`;
