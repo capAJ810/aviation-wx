@@ -944,8 +944,13 @@ function stopWindParticles(){
 function animateWindParticles(){
   if(!windParticleField){ return; }
   const {samples, bounds} = windParticleField;
-  windCtx.fillStyle = 'rgba(10,13,18,0.12)'; // low alpha = fading trails
+  // fade existing trail content toward transparent (NOT toward opaque black) — using
+  // destination-out here is what keeps the map visible underneath; a plain source-over
+  // fill compounds toward solid black over successive frames, which was hiding the map
+  windCtx.globalCompositeOperation = 'destination-out';
+  windCtx.fillStyle = 'rgba(0,0,0,0.12)';
   windCtx.fillRect(0,0,windCanvas.width,windCanvas.height);
+  windCtx.globalCompositeOperation = 'source-over';
 
   const sc = SCALES.wind;
   windParticles.forEach(p=>{
