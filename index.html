@@ -29,7 +29,7 @@
   .label{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.08em;}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 
-  #app{display:flex;height:100vh;height:100dvh;width:100vw;}
+  #app{display:flex;height:100vh;height:calc(var(--vh, 1vh) * 100);width:100vw;}
 
   /* ---- MAP ---- */
   #map{flex:1;height:100%;background:#0a0d12;}
@@ -50,7 +50,7 @@
   @keyframes pulse{50%{opacity:.3;}}
 
   /* ---- ALTITUDE TAPE (signature element) ---- */
-  #tape-wrap{position:absolute;left:16px;top:68px;bottom:calc(120px + env(safe-area-inset-bottom));width:78px;z-index:500;
+  #tape-wrap{position:absolute;left:16px;top:68px;bottom:120px;width:78px;z-index:500;
     display:flex;flex-direction:column;align-items:center;pointer-events:none;}
   #tape{pointer-events:auto;position:relative;flex:1;width:58px;background:rgba(10,13,18,.92);
     border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;box-shadow:var(--shadow);
@@ -100,7 +100,7 @@
     #panel.open{transform:translateX(0);}
     #panel-close{display:block;}
     #panel-open-btn{display:flex;}
-    #tape-wrap{bottom:calc(84px + env(safe-area-inset-bottom));top:64px;width:70px;}
+    #tape-wrap{bottom:84px;top:64px;width:70px;}
     #tape{width:52px;}
     #topbar{padding:12px 68px 12px 12px;}
     #topbar .chip:last-child{display:none;}
@@ -186,7 +186,7 @@
   .grid-pt-icon{background:none;border:none;}
 
   /* ---- TIME BAR ---- */
-  #timebar{position:absolute;left:110px;right:76px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:500;
+  #timebar{position:absolute;left:110px;right:76px;bottom:16px;z-index:500;
     background:rgba(10,13,18,.92);border:1px solid var(--line);border-radius:var(--r-sm);
     padding:6px;box-shadow:var(--shadow);backdrop-filter:blur(6px);}
   #timebar-track{display:flex;gap:4px;}
@@ -195,7 +195,7 @@
   .time-btn:hover{background:rgba(255,255,255,.05);color:var(--text);}
   .time-btn:active{transform:scale(.94);}
   .time-btn.active{background:var(--amber);color:var(--bg);box-shadow:0 0 10px rgba(255,176,0,.4);}
-  @media (max-width:760px){ #timebar{left:98px;right:60px;bottom:calc(16px + env(safe-area-inset-bottom));} .time-btn{font-size:9.5px;padding:8px 2px;} }
+  @media (max-width:760px){ #timebar{left:98px;right:60px;bottom:16px;} .time-btn{font-size:9.5px;padding:8px 2px;} }
 
   /* ---- RADAR ANIMATION ---- */
   #radar-anim{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:500;
@@ -351,6 +351,16 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+/* Mobile Safari's address/toolbar bar can appear/disappear, and its own 100vh handling has
+   historically been unreliable around that transition — this keeps a --vh custom property in
+   sync with the ACTUAL visible height (window.innerHeight), which is the well-tested fix. */
+function setRealVH(){
+  document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px');
+}
+setRealVH();
+window.addEventListener('resize', setRealVH);
+window.addEventListener('orientationchange', ()=>setTimeout(setRealVH, 150));
+
 /* ============================= CONFIG ============================= */
 const LEVELS = [ // hPa, approx altitude ft (ISA), label
   {hpa:1000, ft:360,   fl:'SFC'},
@@ -966,16 +976,17 @@ document.getElementById('search-input').addEventListener('keydown', (e)=>{
 document.getElementById('search-go').addEventListener('click', runSearch);
 
 /* ============================= AIRPORT / METAR-TAF ============================= */
-/* aviationweather.gov's API doesn't send CORS headers, so a direct browser fetch is blocked —
-   route through public CORS relays instead. Free relays are individually flaky (rate limits,
-   occasional downtime), so race several in parallel — first success wins, only fails if all are down. */
+/* aviationweather.gov's API doesn't send CORS headers, so a direct browser fetch is blocked.
+   Primary path: a dedicated Cloudflare Worker (fetches server-side, returns proper CORS headers,
+   not shared with random public traffic). Public relays kept only as a fallback in case the
+   Worker is ever unreachable. */
+const OWN_PROXY = target => `https://noaa-wx-proxy.manoharabhijat.workers.dev/?url=${encodeURIComponent(target)}`;
 const CORS_RELAYS = [
   target => `https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`,
   target => `https://corsproxy.io/?url=${encodeURIComponent(target)}`,
   target => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`,
 ];
 async function fetchViaProxy(target, asText){
-  const attempts = [...CORS_RELAYS.map(fn => fn(target)), target];
   const tryOne = async (url) => {
     const r = await fetch(url);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -983,11 +994,17 @@ async function fetchViaProxy(target, asText){
     if(asText && !body.trim()) throw new Error('empty response');
     return body;
   };
+  // try the dedicated Worker first — if it succeeds, skip the public relays entirely
   try{
-    return await Promise.any(attempts.map(tryOne));
-  }catch(aggErr){
-    const reasons = (aggErr.errors || [aggErr]).map(e=>e.message).join('; ');
-    throw new Error(`all sources failed (${reasons})`);
+    return await tryOne(OWN_PROXY(target));
+  }catch(ownErr){
+    const attempts = [...CORS_RELAYS.map(fn => fn(target)), target];
+    try{
+      return await Promise.any(attempts.map(tryOne));
+    }catch(aggErr){
+      const reasons = (aggErr.errors || [aggErr]).map(e=>e.message).join('; ');
+      throw new Error(`all sources failed, incl. own proxy (${ownErr.message}; ${reasons})`);
+    }
   }
 }
 
