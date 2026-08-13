@@ -190,6 +190,19 @@
   .time-btn.active{background:var(--amber);color:var(--bg);box-shadow:0 0 10px rgba(255,176,0,.4);}
   @media (max-width:760px){ #timebar{left:98px;right:60px;bottom:16px;} .time-btn{font-size:9.5px;padding:8px 2px;} }
 
+  /* ---- RADAR ANIMATION ---- */
+  #radar-anim{position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:500;
+    background:rgba(10,13,18,.92);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:8px 12px;box-shadow:var(--shadow);backdrop-filter:blur(6px);
+    display:flex;align-items:center;gap:10px;min-width:220px;}
+  #radar-play-btn{background:var(--amber);border:none;color:var(--bg);width:28px;height:28px;
+    border-radius:50%;font-size:11px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  #radar-play-btn:active{transform:scale(.9);}
+  #radar-scrub{flex:1;height:4px;background:var(--line);border-radius:2px;position:relative;overflow:hidden;}
+  #radar-scrub-fill{position:absolute;left:0;top:0;bottom:0;background:var(--cyan);border-radius:2px;transition:width .1s linear;}
+  #radar-time{font-size:11px;color:var(--cyan);font-weight:600;flex-shrink:0;min-width:42px;text-align:right;}
+  @media (max-width:760px){ #radar-anim{top:58px;min-width:180px;padding:7px 10px;} }
+
   /* ---- ROUTE PLANNING ---- */
   #route-section{padding:14px 14px 4px;border-bottom:1px solid var(--line);}
   #route-inputs{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
@@ -257,6 +270,11 @@
     <button id="panel-open-btn" onclick="document.getElementById('panel').classList.add('open')">☰</button>
     <div id="timebar">
       <div id="timebar-track"></div>
+    </div>
+    <div id="radar-anim" style="display:none;">
+      <button id="radar-play-btn">▶</button>
+      <div id="radar-scrub"><div id="radar-scrub-fill"></div></div>
+      <span id="radar-time">--:--</span>
     </div>
   </div>
 
@@ -359,11 +377,16 @@ const SURFACE_LAYERS = [
   {id:'cape',       name:'CAPE Index',  tag:'live',    altDependent:false, unit:'J/kg'},
   {id:'cloudbase',  name:'Cloud Base',  tag:'derived', altDependent:false, unit:'ft'},
   {id:'thermals',   name:'Thermals',    tag:'derived', altDependent:false, unit:'ft'},
+  {id:'rain_accum', name:'Rain Accum',  tag:'live',    altDependent:false, unit:'mm'},
+  {id:'thunder',    name:'Thunderstorms', tag:'derived', altDependent:false, unit:''},
 ];
 const ALL_LAYERS = [...IMAGERY_LAYERS, ...ALT_LAYERS, ...SURFACE_LAYERS];
 let activeLayer = null;
 let gridLayerGroup = null;
 let tileLayer = null;
+let radarFrames = [];
+let radarFrameIdx = 0;
+let radarTimer = null;
 let debounceTimer = null;
 
 /* time-ahead offsets for the forecast timeline */
@@ -494,6 +517,8 @@ const SCALES = {
   cape:       {stops:['#2e6b8a','#8fc23e','#e8a838','#ff4d4d'], min:0, max:3000, fmt:v=>Math.round(v)},
   cloudbase:  {stops:['#ff4d4d','#e8a838','#4fd8c9','#e8ecf1'], min:0, max:15000, fmt:v=>Math.round(v/100)/10+'k ft'},
   thermals:   {stops:['#2e6b8a','#8fc23e','#ffb000'], min:0, max:8000, fmt:v=>Math.round(v/100)/10+'k ft'},
+  rain_accum: {stops:['#12161d','#2e6b8a','#4fd8c9','#8a5ee8','#ff4dd2'], min:0, max:50, fmt:v=>v.toFixed(1)+'mm'},
+  thunder:    {stops:['#2e8a5e','#8fc23e','#e8a838','#ff4d4d'], min:0, max:1, fmt:v=>v>0.66?'SEV':v>0.33?'MOD':v>0.05?'LGT':'NIL'},
 };
 
 function updateLegend(id){
@@ -512,6 +537,7 @@ function updateLegend(id){
 function clearMapLayers(){
   gridLayerGroup.clearLayers();
   if(tileLayer){ map.removeLayer(tileLayer); tileLayer = null; }
+  stopRadarAnim();
 }
 function deactivateLayer(){
   activeLayer = null;
@@ -550,20 +576,48 @@ function loadSatellite(){
 }
 function loadRadar(){
   setStatus('loading radar…', true);
+  stopRadarAnim();
   fetch('https://api.rainviewer.com/public/weather-maps.json')
     .then(r=>r.json())
     .then(data=>{
-      const frames = data.radar && data.radar.past;
-      if(!frames || !frames.length){ setStatus('radar unavailable', false); return; }
-      const last = frames[frames.length-1];
-      tileLayer = L.tileLayer(
-        `https://tilecache.rainviewer.com${last.path}/256/{z}/{x}/{y}/2/1_1.png`,
-        {attribution:'RainViewer', opacity:0.7}
-      ).addTo(map);
+      const past = data.radar && data.radar.past;
+      if(!past || !past.length){ setStatus('radar unavailable', false); return; }
+      radarFrames = past.slice(-12); // last ~2 hours at 10-min steps
+      radarFrameIdx = radarFrames.length - 1;
+      tileLayer = L.tileLayer(radarFrameUrl(radarFrames[radarFrameIdx]), {attribution:'RainViewer', opacity:0.7}).addTo(map);
+      document.getElementById('radar-anim').style.display = 'flex';
+      updateRadarAnimUI();
       setStatus('radar · live', false);
     })
     .catch(()=>setStatus('radar error', false));
 }
+function radarFrameUrl(frame){
+  return `https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+}
+function updateRadarAnimUI(){
+  const frame = radarFrames[radarFrameIdx];
+  if(!frame) return;
+  document.getElementById('radar-time').textContent = new Date(frame.time*1000).toISOString().slice(11,16);
+  document.getElementById('radar-scrub-fill').style.width = `${(radarFrameIdx/(radarFrames.length-1))*100}%`;
+}
+function stopRadarAnim(){
+  if(radarTimer){ clearInterval(radarTimer); radarTimer = null; }
+  document.getElementById('radar-play-btn').textContent = '▶';
+  document.getElementById('radar-anim').style.display = 'none';
+}
+document.getElementById('radar-play-btn').addEventListener('click', ()=>{
+  const btn = document.getElementById('radar-play-btn');
+  if(radarTimer){
+    clearInterval(radarTimer); radarTimer = null; btn.textContent = '▶';
+  } else {
+    btn.textContent = '⏸';
+    radarTimer = setInterval(()=>{
+      radarFrameIdx = (radarFrameIdx + 1) % radarFrames.length;
+      if(tileLayer) tileLayer.setUrl(radarFrameUrl(radarFrames[radarFrameIdx]));
+      updateRadarAnimUI();
+    }, 700);
+  }
+});
 
 /* ============================= GRID DATA LAYERS ============================= */
 function buildGrid(){
@@ -596,6 +650,8 @@ function hourlyVarsForLayer(id){
     case 'cape': return ['cape'];
     case 'cloudbase': return ['temperature_2m','dew_point_2m'];
     case 'thermals': return ['boundary_layer_height'];
+    case 'rain_accum': return ['precipitation'];
+    case 'thunder': return ['weather_code','precipitation','cape'];
   }
 }
 
@@ -734,7 +790,22 @@ function computeValue(id, h, i){
     case 'cape': return h.cape[i];
     case 'cloudbase': return lclFeet(h.temperature_2m[i], h.dew_point_2m[i]);
     case 'thermals': return h.boundary_layer_height[i]*3.281;
+    case 'rain_accum': {
+      const win = Math.max(3, selectedHourOffset);
+      let sum = 0;
+      for(let k=i; k<Math.min(h.precipitation.length, i+win); k++) sum += h.precipitation[k] || 0;
+      return sum;
+    }
+    case 'thunder': return thunderIndex(h.weather_code[i], h.precipitation[i], h.cape[i]);
   }
+}
+function thunderIndex(wc, precip, cape){
+  const isTS = wc===95 || wc===96 || wc===99;
+  if(!isTS) return 0.02;
+  let intensity = wc===99 ? 0.9 : wc===96 ? 0.7 : 0.45;
+  intensity = Math.max(intensity, Math.min(1, (cape||0)/2500));
+  if(precip > 10) intensity = Math.min(1, intensity + 0.15);
+  return intensity;
 }
 function icingIndex(t, rh){
   if(t===undefined||rh===undefined) return null;
@@ -769,7 +840,7 @@ function loadProfile(lat, lon){
   lastProfileLatLng = {lat, lng:lon};
   document.getElementById('inspector').innerHTML = `<div id="empty-state"><div class="icon">◌</div><div class="hint">Loading vertical profile…</div></div>`;
   const levelVars = LEVELS.map(l=>`temperature_${l.hpa}hPa,relative_humidity_${l.hpa}hPa,wind_speed_${l.hpa}hPa,wind_direction_${l.hpa}hPa,cloud_cover_${l.hpa}hPa`).join(',');
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility&forecast_days=3&timezone=UTC`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&hourly=${levelVars},cape,visibility,weather_code,precipitation&forecast_days=3&timezone=UTC`;
 
   if(markerLayer) map.removeLayer(markerLayer);
   markerLayer = L.circleMarker([lat,lon], {radius:6, color:'#ffb000', fillColor:'#ffb000', fillOpacity:1, weight:2}).addTo(map);
@@ -805,6 +876,13 @@ function renderProfile(lat, lon, h, i){
     return {l, t, rh, ws, wd, cc, ic, tb};
   });
 
+  const rainWin = Math.max(3, selectedHourOffset);
+  let rainSum = 0;
+  for(let k=i; k<Math.min(h.precipitation.length, i+rainWin); k++) rainSum += h.precipitation[k] || 0;
+  const tsIdx = thunderIndex(h.weather_code[i], h.precipitation[i], h.cape[i]);
+  const tsLabel = tsIdx>0.66?'SEV':tsIdx>0.33?'MOD':tsIdx>0.05?'LGT':'NIL';
+  const tsColor = tsIdx>0.5?'var(--red)':tsIdx>0.2?'#e8a838':'var(--cyan)';
+
   let html = `<div id="profile-header">
       <span class="coords">${lat.toFixed(2)}°, ${lon.toFixed(2)}°</span>
       <span class="close" onclick="closeProfile()">✕</span>
@@ -831,7 +909,8 @@ function renderProfile(lat, lon, h, i){
     <span><i style="background:#c98a2e;"></i>turb (est.)</span>
   </div>
   <div class="hint" style="margin-top:12px;">CAPE: <b>${Math.round(h.cape[i])} J/kg</b> · Surface vis: <b>${(h.visibility[i]/1000).toFixed(1)} km</b></div>
-  <div class="hint" style="margin-top:8px;font-size:10px;">Icing/turbulence are derived estimates from temperature, humidity and wind shear — not a certified aviation hazard product. Verify against official dispatch weather.</div>`;
+  <div class="hint" style="margin-top:6px;">Rain (${rainWin}h): <b>${rainSum.toFixed(1)} mm</b> · Thunderstorm: <b style="color:${tsColor};">${tsLabel}</b></div>
+  <div class="hint" style="margin-top:8px;font-size:10px;">Icing/turbulence/thunderstorm are derived estimates — not a certified aviation hazard product. Verify against official dispatch weather.</div>`;
 
   document.getElementById('inspector').innerHTML = html;
 }
