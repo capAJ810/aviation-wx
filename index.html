@@ -87,6 +87,9 @@
     color:var(--text-dim);width:32px;height:32px;font-size:15px;cursor:pointer;flex-shrink:0;transition:.15s;}
   #panel-close:active{transform:scale(.9);background:var(--line);}
   #panel-scroll{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;}
+  #panel-footer{flex-shrink:0;padding:8px;text-align:center;font-size:9px;letter-spacing:.08em;
+    color:var(--text-dim);border-top:1px solid var(--line);background:var(--panel);
+    font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;}
 
   #panel-open-btn{display:none;position:absolute;top:12px;right:16px;z-index:600;
     background:rgba(10,13,18,.92);border:1px solid var(--line);border-radius:var(--r-sm);
@@ -372,6 +375,7 @@
         </div>
       </div>
     </div>
+    <div id="panel-footer">Created by CaptAJ</div>
   </div>
 </div>
 
