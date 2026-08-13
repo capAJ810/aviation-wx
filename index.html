@@ -1415,7 +1415,7 @@ function renderAirportDots(){
       fillColor: apt.type==='large_airport' ? '#ffb000' : '#4fd8c9',
       fillOpacity:1
     });
-    marker.on('click', ()=> showAirportDetailPanel(apt));
+    marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); showAirportDetailPanel(apt); });
     marker.addTo(airportDotsGroup);
     count++;
     if(count > 800) break; // hard safety cap even within viewport
