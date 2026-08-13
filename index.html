@@ -1424,9 +1424,12 @@ function renderAirportDots(){
       radius: apt.type==='large_airport' ? 5 : 3.5,
       color:'#0a0d12', weight:1.5,
       fillColor: apt.type==='large_airport' ? '#ffb000' : '#4fd8c9',
-      fillOpacity:1
+      fillOpacity:1,
+      bubblingMouseEvents:false // Leaflet Path layers forward clicks to the map by default via
+                                 // their own internal mechanism — separate from real DOM bubbling,
+                                 // so stopPropagation() alone doesn't block it. This option does.
     });
-    marker.on('click', (e)=>{ L.DomEvent.stopPropagation(e); showAirportDetailPanel(apt); });
+    marker.on('click', ()=> showAirportDetailPanel(apt));
     marker.addTo(airportDotsGroup);
     count++;
     if(count > 800) break; // hard safety cap even within viewport
