@@ -46,7 +46,7 @@
 
   /* top status bar over map */
   #topbar{position:absolute;top:0;left:0;right:0;z-index:500;display:flex;align-items:center;
-    justify-content:space-between;padding:12px 16px;pointer-events:none;}
+    justify-content:space-between;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;pointer-events:none;}
   #topbar .chip{pointer-events:auto;background:rgba(10,13,18,.88);border:1px solid var(--line);
     border-radius:var(--r-sm);padding:7px 12px;font-size:11px;color:var(--text-dim);letter-spacing:.05em;
     display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);backdrop-filter:blur(6px);}
@@ -57,7 +57,7 @@
   @keyframes pulse{50%{opacity:.3;}}
 
   /* ---- ALTITUDE TAPE (signature element) ---- */
-  #tape-wrap{position:absolute;left:16px;top:68px;bottom:120px;width:78px;z-index:500;
+  #tape-wrap{position:absolute;left:16px;top:calc(68px + env(safe-area-inset-top));bottom:120px;width:78px;z-index:500;
     display:flex;flex-direction:column;align-items:center;pointer-events:none;}
   #tape{pointer-events:auto;position:relative;flex:1;width:58px;background:rgba(10,13,18,.92);
     border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;box-shadow:var(--shadow);
@@ -84,7 +84,7 @@
   /* ---- RIGHT PANEL ---- */
   #panel{width:340px;min-width:340px;background:var(--panel);border-left:1px solid var(--line);
     display:flex;flex-direction:column;height:100%;overflow:hidden;transition:transform .28s cubic-bezier(.4,0,.2,1);}
-  #panel-header{padding:18px 18px 14px;border-bottom:1px solid var(--line);
+  #panel-header{padding:calc(18px + env(safe-area-inset-top)) 18px 14px;border-bottom:1px solid var(--line);
     display:flex;justify-content:space-between;align-items:flex-start;background:var(--panel);}
   #panel-header h1{font-family:'Barlow Condensed',sans-serif;font-size:23px;font-weight:700;
     letter-spacing:.04em;margin:0;color:var(--text);}
@@ -98,7 +98,7 @@
     color:var(--amber);border-top:1px solid var(--line);background:var(--panel);
     font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;
     white-space:nowrap;overflow:visible;}
-  #panel-open-btn{display:none;position:absolute;top:12px;right:16px;z-index:600;
+  #panel-open-btn{display:none;position:absolute;top:calc(12px + env(safe-area-inset-top));right:16px;z-index:600;
     background:rgba(10,13,18,.92);border:1px solid var(--line);border-radius:var(--r-sm);
     color:var(--amber);width:42px;height:42px;font-size:19px;cursor:pointer;
     align-items:center;justify-content:center;box-shadow:var(--shadow);backdrop-filter:blur(6px);transition:.15s;}
@@ -110,15 +110,15 @@
     #panel.open{transform:translateX(0);}
     #panel-close{display:block;}
     #panel-open-btn{display:flex;}
-    #tape-wrap{bottom:84px;top:64px;width:70px;}
+    #tape-wrap{bottom:84px;top:calc(64px + env(safe-area-inset-top));width:70px;}
     #tape{width:52px;}
-    #topbar{padding:12px 68px 12px 12px;}
+    #topbar{padding:calc(12px + env(safe-area-inset-top)) 68px 12px 12px;}
     #topbar .chip:last-child{display:none;}
     .layer-btn{padding:8px;}
     .lb-thumb{height:52px;}
     .lb-icon{font-size:21px;}
     .layer-btn .name{font-size:14px;}
-    #panel-header{padding:16px 16px 12px;}
+    #panel-header{padding:calc(16px + env(safe-area-inset-top)) 16px 12px;}
     #search-box input{padding:11px 12px 11px 34px;font-size:13px;}
     .profile-row{font-size:12px;grid-template-columns:56px 1fr 34px 34px;}
   }
@@ -471,6 +471,17 @@ L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
 }).addTo(map);
+
+/* Every floating control we've built (altitude tape, time bar, radar animation controls,
+   panel-open button, top status bar) lives as plain HTML on top of the map, not inside
+   Leaflet's own UI system — so without this, a tap on any of them also bubbles through to
+   the map underneath and registers as a genuine map click (which, combined with the mobile
+   auto-open-panel behavior, was yanking the panel open every time you touched the tape or
+   time bar). This is Leaflet's documented fix for exactly that class of bug. */
+['tape-wrap','timebar','radar-anim','panel-open-btn','topbar'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) L.DomEvent.disableClickPropagation(el);
+});
 
 gridLayerGroup = L.layerGroup().addTo(map);
 let markerLayer = null;
