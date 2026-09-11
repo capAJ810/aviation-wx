@@ -468,8 +468,8 @@ let selectedHourOffset = 0;
 /* ============================= MAP INIT ============================= */
 const map = L.map('map', {zoomControl:false, worldCopyJump:true, minZoom:2}).setView([25.2, 55.3], 5); // UAE-ish default
 L.control.zoom({position:'bottomright'}).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:19
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  attribution:'&copy; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxZoom:16
 }).addTo(map);
 
 /* Every floating control we've built (altitude tape, time bar, radar animation controls,
